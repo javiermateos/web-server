@@ -1,0 +1,10 @@
+﻿---
+BasedOnStyle: Mozilla
+BreakBeforeBraces: Linux
+Language: Cpp
+TabWidth: '4'
+IndentWidth: '4'
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+
+...
