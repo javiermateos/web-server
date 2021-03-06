@@ -8,5 +8,15 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 
+#define PORT "3490" // Puerto de escucha del servidor
+#define BACKLOG 10 // Numero de conexiones pendientes que la cola mantiene 
+
+typedef struct {
+    int sock_fd;
+} thread_args_t;
+
+int init_server();
+void* server_thread(void* arg);
+
 #endif /* __SERVER_H__ */
 

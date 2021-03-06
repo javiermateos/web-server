@@ -3,6 +3,7 @@
 #
 # @file Makefile
 # @version 1.0
+
 EDIR := .
 SDIR := src
 IDIR := include
@@ -11,12 +12,12 @@ SLDIR := srclib
 LDIR := lib
 
 NAME := server
-C_NAMES  := main.c # Archivos en src
+C_NAMES := main.c # Archivos en src
 L_NAMES := http.c picohttpparser.c server.c tpool.c iniparser.c # Archivos en srclib
 
 CC := gcc
-CFLAGS := -std=c99 -g -I$(IDIR) -pedantic -Wall -Wextra
-LFLAGS := -L$(LDIR) -liniparser -lserver -lpicohttpparser -lhttp -ltpool
+CFLAGS := -g -I$(IDIR) -pedantic -Wall -Wextra
+LFLAGS := -L$(LDIR) -liniparser -lserver -lpicohttpparser -lhttp -ltpool -lpthread
 
 SFILES := c
 OFILES := o

@@ -1,3 +1,5 @@
 TODO.md
+NOTES.md
 www/media/
-compile-commands.json
+compile_commands.json
+.cache/
