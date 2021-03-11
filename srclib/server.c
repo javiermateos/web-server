@@ -86,15 +86,10 @@ void process_connection(int sock_fd)
     close(sock_fd);
 }
 
-void* server_thread(void* args) {
-    thread_args_t* arg = (thread_args_t*)args;
-    int sock_fd = arg->sock_fd;
-
-    free(args);
+void server_thread(void* args) {
+    int sock_fd = *((int*)args);
 
     fprintf(stdout, "Nuevo hilo...\n");
     process_connection(sock_fd);
     fprintf(stdout, "Hilo finalizado...\n");
-
-    return 0;
 }
