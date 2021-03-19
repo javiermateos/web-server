@@ -12,12 +12,11 @@
 #include <stdio.h>      // printf, perror
 #include <stdlib.h>     // exit
 #include <sys/socket.h> // getaddrinfo, socket, setsockopt, bind
-#include <sys/wait.h> //waitpid
-#include <unistd.h>   // fork, close
+#include <unistd.h>     // fork, close
 
+#include "iniparser.h"
 #include "server.h"
 #include "tpool.h"
-
 
 tpool_t* tm = NULL;
 
@@ -26,13 +25,19 @@ void signal_handler(int s);
 int main(void)
 {
     int sock_fd, new_fd; // Escucha en sock_fd, nueva conexion en new_fd
+    int num_threads;
+    char s[INET_ADDRSTRLEN];
     socklen_t sin_size;
     struct sockaddr their_addr; // informacion de la direccion del cliente
-    char s[INET_ADDRSTRLEN];
     struct sigaction sa;
+    struct read_ini* ri = NULL;
+    struct ini* config = NULL;
+
+    // Obtenemos los parametros de configuracion del servidor
+    config = read_ini(&ri, "server.ini");
 
     // Inicializacion del servidor
-    sock_fd = init_server();
+    sock_fd = init_server(config);
 
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
@@ -49,12 +54,17 @@ int main(void)
     }
 
     // Inicializacion del pool de threads
-    tm = tpool_create(NUM_THREADS);
+    num_threads = atoi(ini_get_value(config, "inicializacion", "num_threads"));
+    tm = tpool_create(num_threads);
     if (!tm) {
         fprintf(stderr, "Error initializing thread pool...\n");
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
+
+    // No necesitamos mas parametros de configuracion
+    destroy_ini(config);
+    cleanup_readini(ri);
 
     printf("server: esperando conexiones entrantes...\n");
 
@@ -77,13 +87,16 @@ int main(void)
         // Realizamos el trabajo en un hilo
         tpool_add_work(tm, server_thread, &new_fd);
     }
-    
-    return 0;
+
+    tpool_destroy(tm);
+
+    exit(EXIT_SUCCESS);
 }
 
 void signal_handler(int s)
 {
-    fprintf(stdout, "Senial %d recibida, esperando que finalizen los hilos...\n", s);
+    fprintf(
+      stdout, "Senial %d recibida, esperando que finalizen los hilos...\n", s);
     tpool_destroy(tm);
     exit(EXIT_SUCCESS);
 }

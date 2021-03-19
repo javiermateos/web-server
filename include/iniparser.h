@@ -1,3 +1,11 @@
+/*****************************************************************************
+ * ARCHIVO: iniparser.h
+ * DESCRIPCION: Interfaz de la libreria para cargar la configuracion
+ * de inicializacion del servidor.
+ * 
+ * AUTORES: nowl
+ * REFERENCIA: https://github.com/nowl/iniparser 
+ *****************************************************************************/
 #ifndef __INI_PARSER_H__
 #define __INI_PARSER_H__
 

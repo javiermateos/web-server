@@ -8,11 +8,9 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 
-#define PORT "3490" // Puerto de escucha del servidor
-#define BACKLOG 10 // Numero de conexiones pendientes que la cola mantiene 
-#define NUM_THREADS 10
+#include "iniparser.h"
 
-int init_server();
+int init_server(struct ini* config);
 void server_thread(void* arg);
 
 #endif /* __SERVER_H__ */

@@ -18,12 +18,14 @@
 
 #include "server.h"
 
-int init_server()
+int init_server(struct ini* config)
 {
     int sock_fd; // Escucha en sock_fd
     struct addrinfo hints, *servinfo, *p;
     int optval = 1;
     int rv;
+    char* port = NULL;
+    int backlog;
 
     // Configuracion de la direccion del socket
     memset(&hints, 0, sizeof hints);
@@ -31,10 +33,12 @@ int init_server()
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
 
-    rv = getaddrinfo(NULL, PORT, &hints, &servinfo);
+    port = ini_get_value(config, "inicializacion", "listen_port");
+
+    rv = getaddrinfo(NULL, port, &hints, &servinfo);
     if (rv != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
+        return EXIT_FAILURE;
     }
 
     // Loop a traves de todos los resultados y bindeamos el primero que podemos
@@ -48,7 +52,7 @@ int init_server()
         if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int)) ==
             -1) {
             perror("server: setsockopt");
-            exit(EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
 
         if (bind(sock_fd, p->ai_addr, p->ai_addrlen) == -1) {
@@ -64,12 +68,14 @@ int init_server()
 
     if (!p) {
         fprintf(stderr, "server: failed to bind\n");
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
 
-    if (listen(sock_fd, BACKLOG) == -1) {
+    backlog = atoi(ini_get_value(config, "inicializacion", "max_clients"));
+
+    if (listen(sock_fd, backlog) == -1) {
         perror("listen");
-        exit(EXIT_SUCCESS);
+        return EXIT_SUCCESS;
     }
 
     return sock_fd;
