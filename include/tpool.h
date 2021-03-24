@@ -8,6 +8,7 @@
 #ifndef __TPOOL_H__
 #define __TPOOL_H__
 
+#include <stdio.h>
 #include <stdbool.h>
 
 typedef struct tpool tpool_t;

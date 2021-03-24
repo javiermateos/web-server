@@ -58,7 +58,7 @@ run:
 .PHONY: runv
 runv:
 	@echo "> Ejecutando servidor con valgrind..."
-	valgrind --leak-check=full --track-origins=yes ./server
+	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all ./server
 
 # Deteccion de dependencias automatica
 CFLAGS += -MMD

@@ -39,6 +39,20 @@ int main(void)
     // Inicializacion del servidor
     sock_fd = init_server(config);
 
+    // Inicializacion del pool de threads
+    num_threads = atoi(ini_get_value(config, "inicializacion", "num_threads"));
+    tm = tpool_create(num_threads);
+    if (!tm) {
+        fprintf(stderr, "Error initializing thread pool...\n");
+        close(sock_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // No necesitamos mas parametros de configuracion
+    destroy_ini(config);
+    cleanup_readini(ri);
+
+    // Establecemos el tratamiento de las seniales de terminacion del programa
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
@@ -52,19 +66,6 @@ int main(void)
         close(sock_fd);
         exit(EXIT_FAILURE);
     }
-
-    // Inicializacion del pool de threads
-    num_threads = atoi(ini_get_value(config, "inicializacion", "num_threads"));
-    tm = tpool_create(num_threads);
-    if (!tm) {
-        fprintf(stderr, "Error initializing thread pool...\n");
-        close(sock_fd);
-        exit(EXIT_FAILURE);
-    }
-
-    // No necesitamos mas parametros de configuracion
-    destroy_ini(config);
-    cleanup_readini(ri);
 
     printf("server: esperando conexiones entrantes...\n");
 

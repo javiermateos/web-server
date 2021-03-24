@@ -1,11 +1,14 @@
 /*****************************************************************************
  * ARCHIVO: tpool.c
- * DESCRIPCION: Implementacion de la interfaz del pool de threads
+ * DESCRIPCION: Implementacion de la interfaz del pool de threads.
  *
- * ADAPTACION: https://nachtimwald.com/2019/04/12/thread-pool-in-c/
+ * REFERENCIA: https://nachtimwald.com/2019/04/12/thread-pool-in-c/
+ *
+ * MODIFICACIONES: Se ha añadido un límite al tamanio de la cola de trabajo.
  *
  * NOTA: Las condiciones de espera en las funciones estan rodeadas por bucles
- * que comprueban si las condiciones de espera verdaderamente deben interrumpirse.
+ * que comprueban si las condiciones de espera verdaderamente deben
+ *interrumpirse.
  *
  * https://www.man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html#top_of_page
  *
@@ -14,6 +17,7 @@
  *****************************************************************************/
 
 #include <pthread.h>
+#include <signal.h> // sigaddset, sigemptyset
 #include <stdlib.h>
 
 #include "tpool.h"
@@ -41,8 +45,8 @@ struct tpool {
 };
 
 /*******************************************************************************
- * FUNCION: static tpool_work_t* tpool_work_create(thread_func_t func, void* arg);
- * ARGS_IN: thread_func_t func - funcion de trabajo que ejecutara el hilo.
+ * FUNCION: static tpool_work_t* tpool_work_create(thread_func_t func, void*
+ *arg); ARGS_IN: thread_func_t func - funcion de trabajo que ejecutara el hilo.
  *          void* arg - argumento de la funcion de trabajo.
  * DESCRIPCION: Crea e inicializa un trabajo.
  * ARGS_OUT: tpool_work_t* - trabajo inicializado.
@@ -142,6 +146,13 @@ static void* tpool_worker(void* arg)
 {
     tpool_t* tm = arg;
     tpool_work_t* work = NULL;
+    sigset_t set;
+
+    // Bloqueamos las señales que interrumpen finalizan el hilo principal.
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    sigaddset(&set, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
 
     // Mantenemos el hilo corriendo hasta que deba parar
     while (1) {
@@ -200,7 +211,7 @@ tpool_t* tpool_create(int num)
     }
 
     tm->thread_cnt = num;
-    tm->queue_size = num;
+    tm->queue_size = num * num;
 
     // Inicializamos los atributos de los hilos
     pthread_mutex_init(&(tm->work_mutex), NULL);
@@ -298,14 +309,10 @@ void tpool_wait(tpool_t* tm)
     }
 
     pthread_mutex_lock(&(tm->work_mutex));
-    while (1) {
-        if ((!tm->stop && tm->working_cnt != 0) ||
-            (tm->stop && tm->thread_cnt != 0)) {
-            // Esperamos a que terminen todos los hilos
-            pthread_cond_wait(&(tm->working_cond), &(tm->work_mutex));
-        } else {
-            break;
-        }
+    while ((!tm->stop && tm->working_cnt != 0) ||
+           (tm->stop && tm->thread_cnt != 0)) {
+        // Esperamos a que terminen todos los hilos
+        pthread_cond_wait(&(tm->working_cond), &(tm->work_mutex));
     }
     pthread_mutex_unlock(&(tm->work_mutex));
 }
