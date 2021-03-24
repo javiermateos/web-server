@@ -20,7 +20,7 @@
 
 tpool_t* tm = NULL;
 
-void signal_handler(int s);
+void signal_handler();
 
 int main(void)
 {
@@ -94,10 +94,10 @@ int main(void)
     exit(EXIT_SUCCESS);
 }
 
-void signal_handler(int s)
+void signal_handler()
 {
     fprintf(
-      stdout, "Senial %d recibida, esperando que finalizen los hilos...\n", s);
+      stdout, "Finalizando programa servidor, esperando que finalizen los hilos...\n");
     tpool_destroy(tm);
     exit(EXIT_SUCCESS);
 }
