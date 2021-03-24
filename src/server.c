@@ -129,3 +129,83 @@ static void server_signal_handler(int s)
     server_close();
     exit(EXIT_SUCCESS);
 }
+
+void server_daemon()
+{
+    int fd0, fd1, fd2;
+    unsigned long i;
+    pid_t pid;
+    struct rlimit rl;
+    struct sigaction sa;
+
+    // Cambiamos la mascara para los permisos de los archivos
+    umask(0);
+
+    // Obtenemos el numero maximo de descriptores de ficheros
+    if (getrlimit(RLIMIT_NOFILE, &rl) < 0) {
+        exit(EXIT_FAILURE);
+    }
+
+    // Convertimos el proceso en el lider de la sesion para perder el control
+    // por parte de la TTY
+    pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid != 0) {
+        // Proceso padre
+        exit(EXIT_SUCCESS);
+    }
+
+    // Creamos una nueva sesion en la que el hijo el el lider
+    if (setsid() < 0) {
+        perror("setsid");
+        exit(EXIT_FAILURE);
+    }
+
+    // Aseguramos que no se asignen TTYs
+    sa.sa_handler = SIG_IGN;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGHUP, &sa, NULL) < 0) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+
+    // Prevenimos que pueda adquirir una TTY
+    pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    } else if (pid != 0) {
+        // Proceso padre
+        exit(EXIT_SUCCESS);
+    }
+
+    // Cambiamos el directorio de trabajo al directorio root para que
+    // no haya problemas al hacer el unmount de los sistemas de ficheros.
+    if (chdir("/") < 0) {
+        perror("chdir");
+    }
+
+    // Cerramos todos los descriptores de ficheros.
+    if (rl.rlim_max == RLIM_INFINITY) {
+        rl.rlim_max = 1024;
+    }
+    for (i = 0; i < rl.rlim_max; i++) {
+        close(i);
+    }
+
+    // Asignamos los descriptores estandar a dev/null por si alguna rutina
+    // trata de emplearlos.
+    fd0 = open("/dev/null", O_RDWR);
+    fd1 = dup(0);
+    fd2 = dup(0);
+
+    // Inicializamos el fichero de logs
+    openlog("SERVER", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_DAEMON);
+    if (fd0 != 0 || fd1 != 1 || fd2 != 2) {
+        syslog(LOG_ERR, "Descriptores de ficheros inesperados %d %d %d", fd0, fd1, fd2);
+        exit(EXIT_FAILURE);
+    }
+}
