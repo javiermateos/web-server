@@ -8,10 +8,14 @@
 #ifndef __SERVER_H__
 #define __SERVER_H__
 
-#include "iniparser.h"
+#include <stdio.h>
+#include <stdbool.h>
 
-int init_server(struct ini* config);
-void server_thread(void* arg);
+typedef struct server server_t;
+
+int server_init(bool daemon, int num_threads, char* port, int backlog);
+void server_close();
+void server_run();
 
 #endif /* __SERVER_H__ */
 

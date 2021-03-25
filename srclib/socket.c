@@ -1,31 +1,26 @@
 /*****************************************************************************
- * ARCHIVO: server.c
- * DESCRIPCION: Implementacion de la interfaz de programacion de un servidor
- * mediante sockets.
+ * ARCHIVO: socket.c
+ * DESCRIPCION: Implementacion de la interfaz de programacion de sockets para
+ * el servidor.
  *
- * FECHA CREACION: 4 Marzo de 2021
+ * FECHA CREACION: 25 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
  *****************************************************************************/
 
-#include <stdio.h> // fprintf
-#include <stdlib.h> // NULL
-#include <string.h> // memset
+#include <arpa/inet.h>  // inet_ntop
+#include <netdb.h>      // addrinfo, getaddrinfo
+#include <string.h>     // memset
+#include <sys/socket.h> // getaddrinfo, socket, setsockopt, bind, listen, accept
+#include <unistd.h>     // close
 
-#include <sys/types.h>
-#include <sys/socket.h> // getaddrinfo, socket, setsockopt, bind
-#include <netdb.h> // addrinfo, getaddrinfo
-#include <unistd.h> // close
+#include "socket.h"
 
-#include "server.h"
-
-int init_server(struct ini* config)
+int socket_init(char* port, int backlog)
 {
     int sock_fd; // Escucha en sock_fd
     struct addrinfo hints, *servinfo, *p;
     int optval = 1;
     int rv;
-    char* port = NULL;
-    int backlog;
 
     // Configuracion de la direccion del socket
     memset(&hints, 0, sizeof hints);
@@ -33,12 +28,10 @@ int init_server(struct ini* config)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
 
-    port = ini_get_value(config, "inicializacion", "listen_port");
-
     rv = getaddrinfo(NULL, port, &hints, &servinfo);
     if (rv != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return EXIT_FAILURE;
+        return -1;
     }
 
     // Loop a traves de todos los resultados y bindeamos el primero que podemos
@@ -49,10 +42,10 @@ int init_server(struct ini* config)
             continue;
         }
 
-        if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int)) ==
-            -1) {
+        if (setsockopt(
+              sock_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int)) == -1) {
             perror("server: setsockopt");
-            return EXIT_FAILURE;
+            return -1;
         }
 
         if (bind(sock_fd, p->ai_addr, p->ai_addrlen) == -1) {
@@ -68,32 +61,38 @@ int init_server(struct ini* config)
 
     if (!p) {
         fprintf(stderr, "server: failed to bind\n");
-        return EXIT_FAILURE;
+        return -1;
     }
-
-    backlog = atoi(ini_get_value(config, "inicializacion", "max_clients"));
 
     if (listen(sock_fd, backlog) == -1) {
         perror("listen");
-        return EXIT_SUCCESS;
+        return -1;
     }
 
     return sock_fd;
 }
 
-void process_connection(int sock_fd)
+int socket_accept(int sock_fd)
 {
-    char *msg = "Hello World!\n";
+    int new_fd;
+    char s[INET_ADDRSTRLEN];
+    socklen_t sin_size;
+    struct sockaddr their_addr; // informacion de la direccion del cliente
 
-    if (send(sock_fd, msg, strlen(msg), 0) < 1) {
-        perror("server: send");
+    sin_size = sizeof their_addr;
+    // Aceptamos una nueva conexion
+    new_fd = accept(sock_fd, &their_addr, &sin_size);
+    if (new_fd == -1) {
+        perror("server: accept");
+        return -1;
     }
 
-    close(sock_fd);
-}
+    // Obtenemos la direccion IP del cliente
+    inet_ntop(their_addr.sa_family,
+              &(((struct sockaddr_in*)&their_addr)->sin_addr),
+              s,
+              sizeof s);
+    fprintf(stdout, "server: conexion entrante de %s\n", s);
 
-void server_thread(void* args) {
-    int sock_fd = *((int*)args);
-
-    process_connection(sock_fd);
+    return new_fd;
 }

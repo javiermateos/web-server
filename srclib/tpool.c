@@ -5,6 +5,8 @@
  * REFERENCIA: https://nachtimwald.com/2019/04/12/thread-pool-in-c/
  *
  * MODIFICACIONES: Se ha añadido un límite al tamanio de la cola de trabajo.
+ * Además, se ha mantenido la referencia a los threads para sincronizar la
+ * finalizacion del pool de hilos.
  *
  * NOTA: Las condiciones de espera en las funciones estan rodeadas por bucles
  * que comprueban si las condiciones de espera verdaderamente deben
@@ -19,6 +21,7 @@
 #include <pthread.h>
 #include <signal.h> // sigaddset, sigemptyset
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "tpool.h"
 
@@ -31,14 +34,13 @@ typedef struct tpool_work {
 
 // Contenedor de hilos
 struct tpool {
+    pthread_t* threads;          // Mantiene la referencia a todos los threads
     tpool_work_t* work_first;    // Primer elemento de la cola de trabajos
     tpool_work_t* work_last;     // Ultimo elemento de la cola de trabajos
     pthread_mutex_t work_mutex;  // Sincroniza el acceso a la cola de trabajo
     pthread_cond_t work_cond;    // Indica que hay trabajo que procesar
-    pthread_cond_t working_cond; // Indica que un thread ha finalizado
     pthread_cond_t gap_cond;     // Indica que hay sitio en la cola
-    size_t working_cnt;          // Indica cuantos threads hay trabajando
-    size_t thread_cnt;           // Indica cuantos threads estan vivos
+    size_t num_threads;          // Indica cuantos threads estan vivos
     size_t queue_size;           // Indica el tamanio max de la cola de trabajo
     size_t work_cnt;             // Indica el tamanio actual de la cola
     bool stop;                   // Para los hilos
@@ -77,14 +79,6 @@ static tpool_work_t* tpool_get_work(tpool_t* tm);
  * ARGS_OUT: void* - NULL si todo ha ido correctamente.
  ******************************************************************************/
 static void* tpool_worker(void* arg);
-
-/*******************************************************************************
- * FUNCION: void tpool_wait(tpool_t* tm);
- * ARGS_IN: tpool_t* tm - Pool de hilos al que se espera que finalice.
- * DESCRIPCION: Funcion que espera a que todos los hilos del pool finalicen
- * antes de retornar.
- ******************************************************************************/
-void tpool_wait(tpool_t* tm);
 
 static tpool_work_t* tpool_work_create(thread_func_t func, void* arg)
 {
@@ -148,7 +142,7 @@ static void* tpool_worker(void* arg)
     tpool_work_t* work = NULL;
     sigset_t set;
 
-    // Bloqueamos las señales que interrumpen finalizan el hilo principal.
+    // Bloqueamos las señales que interrumpen el hilo principal.
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
     sigaddset(&set, SIGTERM);
@@ -164,11 +158,11 @@ static void* tpool_worker(void* arg)
         }
         // Comprobamos si hay que parar el hilo
         if (tm->stop) {
+            pthread_mutex_unlock(&(tm->work_mutex));
             break;
         }
         // Extraemos un trabajo de la cola de trabajos
         work = tpool_get_work(tm);
-        tm->working_cnt++;
         pthread_mutex_unlock(&(tm->work_mutex));
 
         if (work) {
@@ -176,21 +170,7 @@ static void* tpool_worker(void* arg)
             work->func(work->arg);
             tpool_work_destroy(work);
         }
-
-        // El trabajo ha sido procesado
-        pthread_mutex_lock(&(tm->work_mutex));
-        tm->working_cnt--;
-        if (!tm->stop && !tm->working_cnt && !tm->work_first) {
-            // Avisamos a la funcion de espera para que se active
-            pthread_cond_signal(&(tm->working_cond));
-        }
-        pthread_mutex_unlock(&(tm->work_mutex));
     }
-
-    // El hilo para de ejecutarse
-    tm->thread_cnt--;
-    pthread_cond_signal(&(tm->working_cond));
-    pthread_mutex_unlock(&(tm->work_mutex));
 
     return NULL;
 }
@@ -198,7 +178,6 @@ static void* tpool_worker(void* arg)
 tpool_t* tpool_create(int num)
 {
     tpool_t* tm = NULL;
-    pthread_t thread;
     int i;
 
     if (!num) {
@@ -210,13 +189,12 @@ tpool_t* tpool_create(int num)
         return NULL;
     }
 
-    tm->thread_cnt = num;
+    tm->num_threads = num;
     tm->queue_size = num * num;
 
     // Inicializamos los atributos de los hilos
     pthread_mutex_init(&(tm->work_mutex), NULL);
     pthread_cond_init(&(tm->work_cond), NULL);
-    pthread_cond_init(&(tm->working_cond), NULL);
     pthread_cond_init(&(tm->gap_cond), NULL);
 
     // Inicializamos la cola de trabajo
@@ -224,9 +202,9 @@ tpool_t* tpool_create(int num)
     tm->work_last = NULL;
 
     // Creamos los hilos
+    tm->threads = (pthread_t*)malloc(num*sizeof(pthread_t));
     for (i = 0; i < num; i++) {
-        pthread_create(&thread, NULL, tpool_worker, tm);
-        pthread_detach(thread);
+        pthread_create(&tm->threads[i], NULL, tpool_worker, tm);
     }
 
     return tm;
@@ -234,6 +212,7 @@ tpool_t* tpool_create(int num)
 
 void tpool_destroy(tpool_t* tm)
 {
+    size_t i;
     tpool_work_t* work = NULL;
     tpool_work_t* next = NULL;
 
@@ -256,14 +235,16 @@ void tpool_destroy(tpool_t* tm)
     pthread_mutex_unlock(&(tm->work_mutex));
 
     // Esperamos a que terminen todos los hilos
-    tpool_wait(tm);
+    for (i = 0; i < tm->num_threads; i++) {
+        pthread_join(tm->threads[i], NULL);
+    }
 
     // Liberamos todos los atributos de los hilos
     pthread_mutex_destroy(&(tm->work_mutex));
     pthread_cond_destroy(&(tm->work_cond));
-    pthread_cond_destroy(&(tm->working_cond));
     pthread_cond_destroy(&(tm->gap_cond));
 
+    free(tm->threads);
     free(tm);
 }
 
@@ -300,19 +281,4 @@ bool tpool_add_work(tpool_t* tm, thread_func_t func, void* arg)
     pthread_mutex_unlock(&(tm->work_mutex));
 
     return true;
-}
-
-void tpool_wait(tpool_t* tm)
-{
-    if (!tm) {
-        return;
-    }
-
-    pthread_mutex_lock(&(tm->work_mutex));
-    while ((!tm->stop && tm->working_cnt != 0) ||
-           (tm->stop && tm->thread_cnt != 0)) {
-        // Esperamos a que terminen todos los hilos
-        pthread_cond_wait(&(tm->working_cond), &(tm->work_mutex));
-    }
-    pthread_mutex_unlock(&(tm->work_mutex));
 }

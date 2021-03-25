@@ -12,12 +12,12 @@ SLDIR := srclib
 LDIR := lib
 
 NAME := server
-C_NAMES := main.c # Archivos en src
-L_NAMES := http.c picohttpparser.c server.c tpool.c iniparser.c # Archivos en srclib
+C_NAMES := main.c server.c # Archivos en src
+L_NAMES := http.c picohttpparser.c tpool.c iniparser.c socket.c # Archivos en srclib
 
 CC := gcc
 CFLAGS := -g -I$(IDIR) -pedantic -Wall -Wextra
-LFLAGS := -L$(LDIR) -liniparser -lserver -lpicohttpparser -lhttp -ltpool -lpthread
+LFLAGS := -L$(LDIR) -liniparser -lpicohttpparser -lhttp -ltpool -lpthread -lsocket
 
 SFILES := c
 OFILES := o
