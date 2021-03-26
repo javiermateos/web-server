@@ -34,16 +34,16 @@ typedef struct tpool_work {
 
 // Contenedor de hilos
 struct tpool {
-    pthread_t* threads;          // Mantiene la referencia a todos los threads
-    tpool_work_t* work_first;    // Primer elemento de la cola de trabajos
-    tpool_work_t* work_last;     // Ultimo elemento de la cola de trabajos
-    pthread_mutex_t work_mutex;  // Sincroniza el acceso a la cola de trabajo
-    pthread_cond_t work_cond;    // Indica que hay trabajo que procesar
-    pthread_cond_t gap_cond;     // Indica que hay sitio en la cola
-    size_t num_threads;          // Indica cuantos threads estan vivos
-    size_t queue_size;           // Indica el tamanio max de la cola de trabajo
-    size_t work_cnt;             // Indica el tamanio actual de la cola
-    bool stop;                   // Para los hilos
+    pthread_t* threads;         // Mantiene la referencia a todos los threads
+    tpool_work_t* work_first;   // Primer elemento de la cola de trabajos
+    tpool_work_t* work_last;    // Ultimo elemento de la cola de trabajos
+    pthread_mutex_t work_mutex; // Sincroniza el acceso a la cola de trabajo
+    pthread_cond_t work_cond;   // Indica que hay trabajo que procesar
+    pthread_cond_t gap_cond;    // Indica que hay sitio en la cola
+    size_t num_threads;         // Indica cuantos threads estan vivos
+    size_t queue_size;          // Indica el tamanio max de la cola de trabajo
+    size_t work_cnt;            // Indica el tamanio actual de la cola
+    bool stop;                  // Para los hilos
 };
 
 /*******************************************************************************
@@ -202,7 +202,7 @@ tpool_t* tpool_create(int num)
     tm->work_last = NULL;
 
     // Creamos los hilos
-    tm->threads = (pthread_t*)malloc(num*sizeof(pthread_t));
+    tm->threads = (pthread_t*)malloc(num * sizeof(pthread_t));
     for (i = 0; i < num; i++) {
         pthread_create(&tm->threads[i], NULL, tpool_worker, tm);
     }

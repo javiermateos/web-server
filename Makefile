@@ -12,7 +12,7 @@ SLDIR := srclib
 LDIR := lib
 
 NAME := server
-C_NAMES := main.c server.c # Archivos en src
+C_NAMES := main.c # Archivos en src
 L_NAMES := http.c picohttpparser.c tpool.c iniparser.c socket.c # Archivos en srclib
 
 CC := gcc
