@@ -3,3 +3,7 @@ NOTES.md
 www/media/
 compile_commands.json
 .cache/
+obj/*
+lib/*
+server
+.vscode/settings.json

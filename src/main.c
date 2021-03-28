@@ -20,6 +20,7 @@
 #include "iniparser.h"
 #include "socket.h"
 #include "tpool.h"
+#include "http.h"
 
 int sock_fd;
 tpool_t* tm;
@@ -129,12 +130,10 @@ static void signal_handler()
 
 static void thread_routine(void* args)
 {
+    int status = 0;
     int fd = *((int*)args);
-    char* msg = "Hello World!\n";
 
-    if (send(fd, msg, strlen(msg), 0) < 1) {
-        logger(LOG_ERR, "Error enviando el mensaje al cliente...\n");
-    }
+    status = http(fd);
 
     close(fd);
 }

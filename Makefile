@@ -12,12 +12,12 @@ SLDIR := srclib
 LDIR := lib
 
 NAME := server
-C_NAMES := main.c # Archivos en src
-L_NAMES := http.c picohttpparser.c tpool.c iniparser.c socket.c # Archivos en srclib
+C_NAMES := main.c http.c # Archivos en src
+L_NAMES := picohttpparser.c tpool.c iniparser.c socket.c # Archivos en srclib
 
 CC := gcc
 CFLAGS := -g -I$(IDIR) -pedantic -Wall -Wextra
-LFLAGS := -L$(LDIR) -liniparser -lpicohttpparser -lhttp -ltpool -lpthread -lsocket
+LFLAGS := -L$(LDIR) -liniparser -lpicohttpparser -ltpool -lpthread -lsocket
 
 SFILES := c
 OFILES := o
@@ -59,6 +59,9 @@ run:
 runv:
 	@echo "> Ejecutando servidor con valgrind..."
 	valgrind -s --leak-check=full --track-origins=yes --show-leak-kinds=all ./server
+
+request:
+	curl -v -H "Date: Fri, 31 Dec 1999 23:59:59 GMT" --http1.1 127.0.0.1:3490/index.html
 
 # Deteccion de dependencias automatica
 CFLAGS += -MMD
