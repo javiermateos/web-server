@@ -63,6 +63,9 @@ runv:
 request:
 	curl -v -H "Date: Fri, 31 Dec 1999 23:59:59 GMT" --http1.1 127.0.0.1:3490/index.html
 
+requestPost:
+	curl -d "name=Paco" --http1.1 127.0.0.1:3490
+
 # Deteccion de dependencias automatica
 CFLAGS += -MMD
 DEPEND_FILES := $(wildcard $(ODIR)/*.d)

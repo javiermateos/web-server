@@ -130,10 +130,9 @@ static void signal_handler()
 
 static void thread_routine(void* args)
 {
-    int status = 0;
     int fd = *((int*)args);
 
-    status = http(fd);
+    http(fd);
 
     close(fd);
 }
