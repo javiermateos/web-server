@@ -36,7 +36,7 @@ typedef struct request {
     char* body;
 } request_t;
 
-char* get_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: %s\r\nContent-Length: %d\r\nContent-Type: %s\r\n";
+char* get_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: %s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
 
 
 // Private Functions
@@ -177,6 +177,7 @@ void http_get(request_t request, int socket)
     char last_modified[MAX_DATE_LEN];
     int file_len = 0;
     char *content_type;
+    char *file_buff;
     
     // Obtengo la fecha para la cabecera date
     strftime(date, sizeof date, "%a, %d %b %Y %H:%M:%S %Z", &tm);
@@ -204,9 +205,20 @@ void http_get(request_t request, int socket)
     file_len = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    sprintf(response_header, get_response, request.header->version, date, server, last_modified, file_len, content_type);
-    write(socket, response_header,strlen(response_header));
+    // Creo un buffer donde poder leer el fichero para enviarlo
+    file_buff = (char*)malloc(sizeof(char)*file_len);
 
+    // Leo el fichero solicitado en el buffer previamente inicializado
+    fread(file_buff,file_len,1,file);
+
+    // Doy formato e introduzco los valores a los campos de la cadena de headers de la respuesta
+    sprintf(response_header, get_response, request.header->version, date, server, last_modified, file_len, content_type);
+
+    // Envio la respuesta a la peticion realizada
+    write(socket, response_header,strlen(response_header));
+    write(socket,file_buff,file_len);
+
+    free(file_buff);
     fclose(file);
 }
 
