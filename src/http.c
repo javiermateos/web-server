@@ -37,7 +37,9 @@ typedef struct request {
 } request_t;
 
 char* get_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: %s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
+char* get_response_close_con = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: %s\r\nContent-Length: %d\r\nContent-Type: %s\r\nConnection: close\r\n\r\n";
 char* options_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
+char* options_response_close_con = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\nConnection: close\r\n\r\n";
 
 
 // Private Functions
@@ -48,20 +50,23 @@ void http_free_request(request_t request);
 void http_get_date_GMT(char* date);
 char* get_filename_ext(char *filename);
 char* http_get_content_type(char* const file_extension);
-void http_400_bad_request(request_t request);
+void http_400_bad_request(int socket);
+void http_404_not_found(int socket);
+int http_close_connection(request_t request);
 
 void http(int socket)
 {
     request_t request;
+    int closeCon = 1;
 
     do {
         request.header = http_parse_header(socket);
-        /**
+        
         if(request.header == NULL){
-            printf("Error en las cabeceras\n");
+            http_400_bad_request(socket);
             return;
         }
-        */
+        
 
         // Comprobar condicion de socket cerrado
                 
@@ -72,10 +77,15 @@ void http(int socket)
         } else if (!strcmp("OPTIONS",request.header->method)) {
             http_options(request, socket);
         }
-        // write repose
+        
+        if (http_close_connection(request)) {
+            http_free_request(request);
+            close(socket);
+            return;
+        }
 
         http_free_request(request);
-        return;
+
     } while (1);
 }
 
@@ -172,7 +182,6 @@ void http_free_request(request_t request)
     free(request.header);
 }
 
-
 void http_get(request_t request, int socket)
 {
     char date[MAX_DATE_LEN], path[100], response_header[MAX_HTTP_HEADER], last_modified[MAX_DATE_LEN];
@@ -191,6 +200,7 @@ void http_get(request_t request, int socket)
 
     // Obtengo los atributos del fichero
     if(stat(path, &attr) != 0){
+        http_404_not_found(socket);
         return;
     }
 
@@ -220,7 +230,11 @@ void http_get(request_t request, int socket)
     fread(file_buff,file_len,1,file);
 
     // Doy formato e introduzco los valores a los campos de la cadena de headers de la respuesta
-    sprintf(response_header, get_response, request.header->version, date, server, last_modified, file_len, content_type);
+    if( http_close_connection(request) == 1){
+        sprintf(response_header, get_response_close_con, request.header->version, date, server, last_modified, file_len, content_type);
+    } else {
+        sprintf(response_header, get_response, request.header->version, date, server, last_modified, file_len, content_type);
+    }
 
     // Envio la respuesta a la peticion realizada
     write(socket, response_header,strlen(response_header));
@@ -231,8 +245,6 @@ void http_get(request_t request, int socket)
     fclose(file);
 }
 
-// char* options_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
-
 void http_options(request_t request, int socket)
 {
     char date[MAX_DATE_LEN], response_header[MAX_HTTP_HEADER];
@@ -240,17 +252,21 @@ void http_options(request_t request, int socket)
 
     http_get_date_GMT(date);
 
-    sprintf(response_header, options_response, request.header->version, date, server);
+    if (http_close_connection(request) == 1) {
+        sprintf(response_header, options_response_close_con, request.header->version, date, server);
+    } else {
+        sprintf(response_header, options_response, request.header->version, date, server);
+    }
 
     write(socket, response_header, strlen(response_header));
 }
 
- char * get_filename_ext(char *filename) {
+ char* get_filename_ext(char *filename) 
+ {
     char *dot = strrchr(filename, '.');
     if(!dot || dot == filename) return "";
     return dot + 1;
 }
-
 
 void http_get_date_GMT(char* date)
 {
@@ -258,6 +274,19 @@ void http_get_date_GMT(char* date)
     struct tm tm = *gmtime(&now);
     
     strftime(date, MAX_DATE_LEN, "%a, %d %b %Y %H:%M:%S %Z", &tm);
+}
+
+int http_close_connection(request_t request)
+{
+    size_t i;
+
+    for ( i = 0; i < request.header->num_headers ;i++) {
+        if (strcmp(request.header->headers[i].name, "Connection") == 0 && strcmp(request.header->headers[i].value, "close") == 0) {
+            return 1;    
+        }
+    }
+
+    return 0;
 }
 
 char* http_get_content_type(char* const file_extension)
@@ -273,3 +302,12 @@ char* http_get_content_type(char* const file_extension)
     return "NonType";
 }
 
+void http_400_bad_request(int socket)
+{
+    write(socket, "HTTP/1.1 400 Bad Request\r\n", strlen("HTTP/1.1 400 Bad Request\r\n"));
+}
+
+void http_404_not_found(int socket)
+{
+    write(socket, "HTTP/1.1 404 Not Found\r\n", strlen("HTTP/1.1 404 Not Found\r\n"));
+}
