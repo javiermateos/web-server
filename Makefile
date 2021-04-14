@@ -63,6 +63,10 @@ runv:
 request:
 	curl -v -H "Date: Fri, 31 Dec 1999 23:59:59 GMT" --http1.1 127.0.0.1:3490/index.html
 
+requestOptions:
+	curl -v -X OPTIONS --http1.1 127.0.0.1:3490/index.html
+
+
 requestPost:
 	curl -d "name=Paco" --http1.1 127.0.0.1:3490
 

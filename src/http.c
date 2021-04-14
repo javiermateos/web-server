@@ -37,12 +37,15 @@ typedef struct request {
 } request_t;
 
 char* get_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: %s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
+char* options_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
 
 
 // Private Functions
 request_header_t* http_parse_header(int socket);
-void http_free_request(request_t request);
 void http_get(request_t request, int socket);
+void http_options(request_t request, int socket);
+void http_free_request(request_t request);
+void http_get_date_GMT(char* date);
 char* get_filename_ext(char *filename);
 char* http_get_content_type(char* const file_extension);
 void http_400_bad_request(request_t request);
@@ -53,6 +56,12 @@ void http(int socket)
 
     do {
         request.header = http_parse_header(socket);
+        /**
+        if(request.header == NULL){
+            printf("Error en las cabeceras\n");
+            return;
+        }
+        */
 
         // Comprobar condicion de socket cerrado
                 
@@ -61,7 +70,7 @@ void http(int socket)
         } else if (!strcmp("GET",request.header->method)) {
             http_get(request, socket);
         } else if (!strcmp("OPTIONS",request.header->method)) {
-
+            http_options(request, socket);
         }
         // write repose
 
@@ -131,7 +140,7 @@ request_header_t* http_parse_header(int socket)
       (struct phr_header*)malloc(num_headers * sizeof(struct phr_header));
     for (i = 0; i < header->num_headers; i++) {
         header->headers[i].name =
-          (char*)malloc((headers[i].name_len + 1) * sizeof(char));
+        (char*)malloc((headers[i].name_len + 1) * sizeof(char));
         snprintf((char*)header->headers[i].name,
                  headers[i].name_len + 1,
                  "%s",
@@ -166,22 +175,13 @@ void http_free_request(request_t request)
 
 void http_get(request_t request, int socket)
 {
-    char date[100];
-    time_t now = time(0);
-    struct tm tm = *gmtime(&now);
-    char path[100];
-    char response_header[MAX_HTTP_HEADER];
+    char date[MAX_DATE_LEN], path[100], response_header[MAX_HTTP_HEADER], last_modified[MAX_DATE_LEN];
+    char *content_type, *file_buff;
     char server[7] = "perico\0";
+    int file_len = 0;
     FILE *file;
     struct stat attr;
-    char last_modified[MAX_DATE_LEN];
-    int file_len = 0;
-    char *content_type;
-    char *file_buff;
     
-    // Obtengo la fecha para la cabecera date
-    strftime(date, sizeof date, "%a, %d %b %Y %H:%M:%S %Z", &tm);
-
     // Asigno el directorio a la ruta donde se encuentran los contenidos del servidor
     chdir("./www/");
 
@@ -189,24 +189,32 @@ void http_get(request_t request, int socket)
     strcpy(path, request.header->path);
     memmove(path, path+1, strlen(path));
 
+    // Obtengo los atributos del fichero
+    if(stat(path, &attr) != 0){
+        return;
+    }
+
+    // Tamanio del fichero
+    file_len = attr.st_size;
+
     // Ultima vez modificado
-    stat(path, &attr);
     strftime(last_modified, MAX_DATE_LEN, "%a, %d %b %Y %H:%M:%S %Z", gmtime(&attr.st_mtime));
+    
 
     // Tipo de fichero
     char* const file_extension = get_filename_ext(path);
     content_type = http_get_content_type(file_extension);
-
     
-    file = fopen(path,"rb");
+    // Obtengo la fecha para la cabecera date
+    http_get_date_GMT(date);
 
-    // Obtener longitud del fichero y reseteo el cursor
-    fseek(file, 0, SEEK_END);
-    file_len = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    file = fopen(path,"rb");
 
     // Creo un buffer donde poder leer el fichero para enviarlo
     file_buff = (char*)malloc(sizeof(char)*file_len);
+    if (!file_buff) {
+        return;
+    }
 
     // Leo el fichero solicitado en el buffer previamente inicializado
     fread(file_buff,file_len,1,file);
@@ -218,14 +226,38 @@ void http_get(request_t request, int socket)
     write(socket, response_header,strlen(response_header));
     write(socket,file_buff,file_len);
 
+    chdir("..");
     free(file_buff);
     fclose(file);
+}
+
+// char* options_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
+
+void http_options(request_t request, int socket)
+{
+    char date[MAX_DATE_LEN], response_header[MAX_HTTP_HEADER];
+    char server[7] = "perico\0";
+
+    http_get_date_GMT(date);
+
+    sprintf(response_header, options_response, request.header->version, date, server);
+
+    write(socket, response_header, strlen(response_header));
 }
 
  char * get_filename_ext(char *filename) {
     char *dot = strrchr(filename, '.');
     if(!dot || dot == filename) return "";
     return dot + 1;
+}
+
+
+void http_get_date_GMT(char* date)
+{
+    time_t now = time(0);
+    struct tm tm = *gmtime(&now);
+    
+    strftime(date, MAX_DATE_LEN, "%a, %d %b %Y %H:%M:%S %Z", &tm);
 }
 
 char* http_get_content_type(char* const file_extension)
@@ -240,5 +272,4 @@ char* http_get_content_type(char* const file_extension)
 
     return "NonType";
 }
-
 
