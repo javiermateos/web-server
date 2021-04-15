@@ -134,7 +134,6 @@ static void thread_routine(void* args)
 
     http(fd);
 
-    close(fd);
 }
 
 static void daemon_process()

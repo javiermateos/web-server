@@ -57,16 +57,15 @@ int http_close_connection(request_t request);
 void http(int socket)
 {
     request_t request;
-    int closeCon = 1;
 
     do {
         request.header = http_parse_header(socket);
         
         if(request.header == NULL){
             http_400_bad_request(socket);
+            close(socket);
             return;
         }
-        
 
         // Comprobar condicion de socket cerrado
                 
