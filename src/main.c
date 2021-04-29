@@ -5,15 +5,13 @@
  * FECHA CREACION: 4 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
  *****************************************************************************/
-
 #include <fcntl.h>   // open
 #include <signal.h>  // pthread_sigmask
 #include <stdbool.h> // bool
-#include <stdio.h>
 #include <sys/resource.h> // getrlimit
 #include <sys/socket.h>   // send
 #include <sys/stat.h>     // umask
-#include <sys/syslog.h>
+#include <sys/syslog.h> // syslog
 #include <syslog.h> // openlog
 #include <unistd.h> // close
 
@@ -21,6 +19,8 @@
 #include "socket.h"
 #include "tpool.h"
 #include "http.h"
+
+#define TIME_OUT_SOCKET 15 // Tiempo de espera en un socket de un cliente
 
 int sock_fd;
 tpool_t* tm;
@@ -42,6 +42,8 @@ int main(void)
     char* port = NULL;
     int new_fd;
     struct sigaction sa;
+    struct timeval timeout;
+    int* new_fd_copy = NULL;
 
     config.conf = read_ini(&config.ri, "server.ini");
     if (!config.conf) {
@@ -104,11 +106,16 @@ int main(void)
         if (new_fd == -1) {
             continue;
         }
-        logger(LOG_INFO, "Conexion entrante recibida...\n");
         // Bloqueamos las seniales mientras se introduce el trabajo en la cola
         pthread_sigmask(SIG_BLOCK, &sa.sa_mask, NULL);
+        // Asignamos un time-out al socket
+        timeout.tv_sec = TIME_OUT_SOCKET;
+        timeout.tv_usec = 0;
+        setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
         // Insertamos el trabajo en la cola de trabajos del pool de hilos
-        if (!tpool_add_work(tm, thread_routine, &new_fd)) {
+        new_fd_copy = (int*)malloc(sizeof(int));
+        *new_fd_copy = new_fd;
+        if (!tpool_add_work(tm, thread_routine, new_fd_copy)) {
             logger(LOG_ERR, "Conexion entrante no procesada...\n");
             close(new_fd);
         }
@@ -132,8 +139,14 @@ static void thread_routine(void* args)
 {
     int fd = *((int*)args);
 
-    http(fd);
+    free(args);
 
+    logger(LOG_INFO, "Conexion entrante recibida...\n");
+
+    http(fd);
+    close(fd);
+
+    logger(LOG_INFO, "Conexion cerrada...\n");
 }
 
 static void daemon_process()

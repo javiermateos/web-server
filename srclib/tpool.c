@@ -10,7 +10,7 @@
  *
  * NOTA: Las condiciones de espera en las funciones estan rodeadas por bucles
  * que comprueban si las condiciones de espera verdaderamente deben
- *interrumpirse.
+ * interrumpirse.
  *
  * https://www.man7.org/linux/man-pages/man3/pthread_cond_broadcast.3p.html#top_of_page
  *
@@ -89,6 +89,9 @@ static tpool_work_t* tpool_work_create(thread_func_t func, void* arg)
     }
 
     work = (tpool_work_t*)malloc(sizeof(tpool_work_t));
+    if (!work) {
+        return NULL;
+    }
     work->func = func;
     work->arg = arg;
     work->next = NULL;
@@ -101,7 +104,7 @@ static void tpool_work_destroy(tpool_work_t* work)
     if (!work) {
         return;
     }
-
+    
     free(work);
 }
 
@@ -200,6 +203,8 @@ tpool_t* tpool_create(int num)
     // Inicializamos la cola de trabajo
     tm->work_first = NULL;
     tm->work_last = NULL;
+    tm->work_cnt = 0;
+    tm->stop = false;
 
     // Creamos los hilos
     tm->threads = (pthread_t*)malloc(num * sizeof(pthread_t));
