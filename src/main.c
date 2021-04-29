@@ -142,6 +142,7 @@ static void signal_handler()
 {
     logger(LOG_DEBUG,
            "Senial recibida, esperando a que finalicen los hilos...\n");
+
     close(sock_fd);
     tpool_destroy(tm);
     destroy_ini(config.conf);

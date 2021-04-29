@@ -24,6 +24,14 @@
 #define MAX_HTTP_NUM_HEADERS 100    // Numero maximo de cabeceras
 #define MAX_HTTP_DATE_LEN 128 // Maxima longitud de la fecha
 #define MAX_HTTP_HEADER 1024 // Tamanyo maximo de cabecera en la respuesta
+#define MAX_HTTP_ERRORS 4 // Numero de errores del servidor
+
+typedef enum error {
+    BAD_REQUEST,
+    NOT_FOUND,
+    NOT_IMPLEMENTED,
+    INTERNAL_SERVER_ERROR,
+} error_t;
 
 typedef struct request_header {
     char* method;
@@ -39,17 +47,20 @@ typedef struct request {
 } request_t;
 
 char* get_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: %s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
-char* options_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
-char* error_400_response = "HTTP/1.1 400 Bad Request\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n";
-char* error_404_response = "HTTP/1.1 404 Not Found\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n";
+char* options_response = "HTTP/1.%d 200 OK\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
+char* error_response [MAX_HTTP_ERRORS] = {
+    "HTTP/1.1 400 Bad Request\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
+    "HTTP/1.1 404 Not Found\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
+    "HTTP/1.1 501 Not Implemented\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
+    "HTTP/1.1 500 Internal Server Error\r\nDate: %s\r\nConnection: close\r\nServer: %s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
+};
 
 // Funciones privadas
 static int http_parse_request(int socket, request_t* request);
 static void http_free_request(request_t* request);
 static int http_get(request_t request, int socket, char* server_root, char* server_signature);
 static int http_options(request_t request, int socket, char* server_signature);
-static void http_error_400_bad_request(int socket, char* server_signature);
-static void http_error_404_not_found(int socket, char* server_signature);
+static void http_error(int socket, char* server_signature, error_t error);
 // Funciones Auxiliares
 static char* http_get_content_type(char* const file_extension);
 static char* http_get_file_extension(char* filename);
@@ -67,37 +78,30 @@ void http(int socket, char* server_root, char* server_signature)
         if (status == -1) {
             // Conexion cerrada por el cliente
             break;
-        } else if (status == -2) {
+        } else if (status == -2 || status == -3 || status == -4) {
             // Bad request
-            http_error_400_bad_request(socket, server_signature);
-            break;
-        } else if (status == -3) {
-            printf("Request demasiado larga...\n");  
+            http_error(socket, server_signature, BAD_REQUEST);
             break;
         }
 
         if (!strcmp("GET", request.header.method)) {
             status = http_get(request, socket, server_root, server_signature);
             if (status == -1) {
-                printf("El archivo no se ha encontrado...\n");
-                http_error_404_not_found(socket, server_signature);
+                http_error(socket, server_signature, NOT_FOUND);
                 break;
-            }  else if (status == -2) {
-                printf("Error obteniendo la extension...\n");
+            }  else if (status == -2 || status == -3 || status == -4) {
+                http_error(socket, server_signature, INTERNAL_SERVER_ERROR);
                 break;
-            } else if (status == -3) {
-                printf("Error obteniendo el tipo de contenido...\n");
-                break;
-            } else if (status == -4) {
-                printf("Error enviando la informacion...\n");
-                break;
-            }
+            } 
         } else if (!strcmp("OPTIONS", request.header.method)) {
             status = http_options(request, socket, server_signature);
             if (status == -4) {
-                printf("Error enviando la informacion...\n");
+                http_error(socket, server_signature, INTERNAL_SERVER_ERROR);
                 break;
             }
+        } else {
+            http_error(socket, server_signature, NOT_IMPLEMENTED);
+            break;
         }
 
         http_free_request(&request);
@@ -145,12 +149,12 @@ static int http_parse_request(int socket, request_t* request)
         if (pret > 0) {
             // Cabecera correctamente parseada
             break;
-        } else if (pret == -1 || offset == sizeof(buf)) {
+        } else if (pret == -1) {
             // Error parseando la request
-            return -2;
+            return -3;
         } else if (offset == sizeof(buf)) {
             // Request demasiado larga
-            return -3;
+            return -4;
         }
     }
 
@@ -349,17 +353,10 @@ static void http_get_date(char* date)
     strftime(date, MAX_HTTP_DATE_LEN, "%a, %d %b %Y %H:%M:%S %Z", tm);
 }
 
-static void http_error_400_bad_request(int socket, char* server_signature)
+static void http_error(int socket, char* server_signature, error_t error)
 {
     char date[MAX_HTTP_DATE_LEN], response_header[MAX_HTTP_HEADER];
-    sprintf(response_header, error_400_response, date, server_signature);
-    send(socket, response_header, strlen(response_header), 0);
-}
-
-static void http_error_404_not_found(int socket, char* server_signature)
-{
-    char date[MAX_HTTP_DATE_LEN], response_header[MAX_HTTP_HEADER];
-    sprintf(response_header, error_404_response, date, server_signature);
+    sprintf(response_header, error_response[error], date, server_signature);
     send(socket, response_header, strlen(response_header), 0);
 }
 
