@@ -46,17 +46,17 @@ char* error_404_response = "HTTP/1.1 404 Not Found\r\nDate: %s\r\nConnection: cl
 // Funciones privadas
 static int http_parse_request(int socket, request_t* request);
 static void http_free_request(request_t* request);
-static int http_get(request_t request, int socket);
-static int http_options(request_t request, int socket);
-static void http_error_400_bad_request(int socket);
-static void http_error_404_not_found(int socket);
+static int http_get(request_t request, int socket, char* server_root, char* server_signature);
+static int http_options(request_t request, int socket, char* server_signature);
+static void http_error_400_bad_request(int socket, char* server_signature);
+static void http_error_404_not_found(int socket, char* server_signature);
 // Funciones Auxiliares
 static char* http_get_content_type(char* const file_extension);
 static char* http_get_file_extension(char* filename);
 static void http_get_date(char* date);
 /* static void print_request(request_t request); */
 
-void http(int socket)
+void http(int socket, char* server_root, char* server_signature)
 {
     int status;
     request_t request;
@@ -69,7 +69,7 @@ void http(int socket)
             break;
         } else if (status == -2) {
             // Bad request
-            http_error_400_bad_request(socket);
+            http_error_400_bad_request(socket, server_signature);
             break;
         } else if (status == -3) {
             printf("Request demasiado larga...\n");  
@@ -77,10 +77,10 @@ void http(int socket)
         }
 
         if (!strcmp("GET", request.header.method)) {
-            status = http_get(request, socket);
+            status = http_get(request, socket, server_root, server_signature);
             if (status == -1) {
                 printf("El archivo no se ha encontrado...\n");
-                http_error_404_not_found(socket);
+                http_error_404_not_found(socket, server_signature);
                 break;
             }  else if (status == -2) {
                 printf("Error obteniendo la extension...\n");
@@ -93,7 +93,7 @@ void http(int socket)
                 break;
             }
         } else if (!strcmp("OPTIONS", request.header.method)) {
-            status = http_options(request, socket);
+            status = http_options(request, socket, server_signature);
             if (status == -4) {
                 printf("Error enviando la informacion...\n");
                 break;
@@ -219,7 +219,7 @@ static void http_free_request(request_t* request)
     }
 }
 
-static int http_get(request_t request, int socket)
+static int http_get(request_t request, int socket, char* server_root, char* server_signature)
 {
     struct stat attr;
     int file_len;
@@ -227,13 +227,12 @@ static int http_get(request_t request, int socket)
     char date[MAX_HTTP_DATE_LEN];
     char* content_type = NULL;
     char response_header[MAX_HTTP_HEADER];
-    char server[7] = "perico\0";
     char path[100];
     int fd_file;
     ssize_t offset = 0;
     ssize_t bytes = 0;
 
-    strcpy(path, "www");
+    strcpy(path, server_root);
     strcat(path, request.header.path);
 
     fd_file = open(path, O_RDONLY);
@@ -269,7 +268,7 @@ static int http_get(request_t request, int socket)
             get_response,
             request.header.version,
             date,
-            server,
+            server_signature,
             last_modified,
             file_len,
             content_type);
@@ -293,15 +292,14 @@ static int http_get(request_t request, int socket)
     return 0;
 }
 
-static int http_options(request_t request, int socket)
+static int http_options(request_t request, int socket, char* server_signature)
 {
     char date[MAX_HTTP_DATE_LEN], response_header[MAX_HTTP_HEADER];
-    char server[7] = "perico\0";
     ssize_t bytes, offset=0;
 
     http_get_date(date);
 
-    sprintf(response_header, options_response, request.header.version, date, server);
+    sprintf(response_header, options_response, request.header.version, date, server_signature);
 
     do {
         bytes = send(socket, response_header + offset, strlen(response_header) - offset, 0);
@@ -351,19 +349,17 @@ static void http_get_date(char* date)
     strftime(date, MAX_HTTP_DATE_LEN, "%a, %d %b %Y %H:%M:%S %Z", tm);
 }
 
-static void http_error_400_bad_request(int socket)
+static void http_error_400_bad_request(int socket, char* server_signature)
 {
     char date[MAX_HTTP_DATE_LEN], response_header[MAX_HTTP_HEADER];
-    char server[7] = "perico\0";
-    sprintf(response_header, error_400_response, date, server);
+    sprintf(response_header, error_400_response, date, server_signature);
     send(socket, response_header, strlen(response_header), 0);
 }
 
-static void http_error_404_not_found(int socket)
+static void http_error_404_not_found(int socket, char* server_signature)
 {
     char date[MAX_HTTP_DATE_LEN], response_header[MAX_HTTP_HEADER];
-    char server[7] = "perico\0";
-    sprintf(response_header, error_404_response, date, server);
+    sprintf(response_header, error_404_response, date, server_signature);
     send(socket, response_header, strlen(response_header), 0);
 }
 

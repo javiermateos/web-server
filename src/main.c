@@ -11,16 +11,18 @@
 #include <sys/resource.h> // getrlimit
 #include <sys/socket.h>   // send
 #include <sys/stat.h>     // umask
-#include <sys/syslog.h> // syslog
-#include <syslog.h> // openlog
-#include <unistd.h> // close
+#include <sys/syslog.h>   // syslog
+#include <syslog.h>       // openlog
+#include <unistd.h>       // close
 
+#include "http.h"
 #include "iniparser.h"
 #include "socket.h"
 #include "tpool.h"
-#include "http.h"
 
 #define TIME_OUT_SOCKET 15 // Tiempo de espera en un socket de un cliente
+#define MAX_SERVER_SIGNATURE 50 // Tamanyo maximo de nombre de servidor
+#define MAX_SERVER_ROOT 50 // Tamanyio maximo del directorio root http
 
 int sock_fd;
 tpool_t* tm;
@@ -31,19 +33,30 @@ struct config_s {
     struct ini* conf;
 } config;
 
+struct thread_arg {
+    int new_fd;
+    char server_signature[MAX_SERVER_SIGNATURE];
+    char server_root[MAX_SERVER_ROOT];
+};
+
 static void signal_handler();
 static void thread_routine(void* args);
 static void daemon_process();
 static void logger(int priority, char* message);
+static struct thread_arg* create_thread_args(int new_fd,
+                                             char* server_root,
+                                             char* server_signature);
 
 int main(void)
 {
     int num_threads, backlog;
     char* port = NULL;
+    char* server_root = NULL;
+    char* server_signature = NULL;
     int new_fd;
     struct sigaction sa;
     struct timeval timeout;
-    int* new_fd_copy = NULL;
+    struct thread_arg* args = NULL;
 
     config.conf = read_ini(&config.ri, "server.ini");
     if (!config.conf) {
@@ -57,6 +70,9 @@ int main(void)
       atoi(ini_get_value(config.conf, "inicializacion", "num_threads"));
     daemon_proc = atoi(ini_get_value(config.conf, "inicializacion", "daemon"));
     debug = atoi(ini_get_value(config.conf, "inicializacion", "debug"));
+    server_root = ini_get_value(config.conf, "configuracion", "server_root");
+    server_signature =
+      ini_get_value(config.conf, "configuracion", "server_signature");
 
     if (daemon_proc) {
         fprintf(stdout, "Ejecutando servidor como proceso daemon...\n");
@@ -95,10 +111,6 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
-    // No necesitamos mas parametros de configuracion
-    destroy_ini(config.conf);
-    cleanup_readini(config.ri);
-
     logger(LOG_INFO, "Servidor listo para recibir conexiones...\n");
 
     do {
@@ -111,11 +123,11 @@ int main(void)
         // Asignamos un time-out al socket
         timeout.tv_sec = TIME_OUT_SOCKET;
         timeout.tv_usec = 0;
-        setsockopt(new_fd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+        setsockopt(
+          new_fd, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
         // Insertamos el trabajo en la cola de trabajos del pool de hilos
-        new_fd_copy = (int*)malloc(sizeof(int));
-        *new_fd_copy = new_fd;
-        if (!tpool_add_work(tm, thread_routine, new_fd_copy)) {
+        args = create_thread_args(new_fd, server_root, server_signature);
+        if (!tpool_add_work(tm, thread_routine, args)) {
             logger(LOG_ERR, "Conexion entrante no procesada...\n");
             close(new_fd);
         }
@@ -132,19 +144,22 @@ static void signal_handler()
            "Senial recibida, esperando a que finalicen los hilos...\n");
     close(sock_fd);
     tpool_destroy(tm);
+    destroy_ini(config.conf);
+    cleanup_readini(config.ri);
+
     exit(EXIT_SUCCESS);
 }
 
 static void thread_routine(void* args)
 {
-    int fd = *((int*)args);
+    struct thread_arg arg = *((struct thread_arg*)args);
 
     free(args);
 
     logger(LOG_INFO, "Conexion entrante recibida...\n");
 
-    http(fd);
-    close(fd);
+    http(arg.new_fd, arg.server_root, arg.server_signature);
+    close(arg.new_fd);
 
     logger(LOG_INFO, "Conexion cerrada...\n");
 }
@@ -235,4 +250,22 @@ static void logger(int priority, char* message)
                 }
         }
     }
+}
+
+static struct thread_arg* create_thread_args(int new_fd,
+                                             char* server_root,
+                                             char* server_signature)
+{
+    struct thread_arg* args = NULL;
+
+    args = (struct thread_arg*)malloc(sizeof(struct thread_arg));
+    if (!args) {
+        return NULL;
+    }
+
+    args->new_fd = new_fd;
+    strcpy(args->server_root, server_root);
+    strcpy(args->server_signature, server_signature);
+
+    return args;
 }
