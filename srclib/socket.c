@@ -81,3 +81,38 @@ int socket_accept(int sock_fd)
 
     return new_fd;
 }
+
+int socket_send(int sock_fd,
+                char* response_header,
+                char* response_body,
+                int response_body_len)
+{
+    ssize_t bytes;
+    ssize_t offset;
+
+    offset = 0;
+    do {
+        // Enviamos la cabecera de la respuesta
+        bytes = send(sock_fd,
+                     response_header + offset,
+                     strlen(response_header) - offset,
+                     0);
+        if (bytes == -1) {
+            return -1;
+        }
+        offset += bytes;
+    } while (offset < (ssize_t)strlen(response_header));
+    offset = 0;
+    do {
+        // Enviamos el cuerpo de la cabecera
+        bytes =
+          send(sock_fd, response_body + offset, response_body_len - offset, 0);
+        if (bytes == -1) {
+            // TODO: Revisar error ya que la cabecera ha sido enviada
+            return -1;
+        }
+        offset += bytes;
+    } while (offset < (ssize_t)strlen(response_body));
+
+    return 0;
+}

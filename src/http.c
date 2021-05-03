@@ -6,28 +6,28 @@
  * FECHA CREACION: 4 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
  *****************************************************************************/
-#include <fcntl.h> // open
+#include <fcntl.h>        // open
 #include <stdlib.h>       // NULL
 #include <string.h>       // strcmp
 #include <sys/sendfile.h> // sendfile
 #include <sys/socket.h>   // recv
 #include <sys/stat.h>     // stat
 #include <sys/stat.h>     // open
+#include <sys/wait.h>     // wait
 #include <time.h>         // strftime
 #include <unistd.h>       // chdir
-#include <sys/wait.h> // wait
 
 #include "http.h"
 #include "picohttpparser.h"
+#include "socket.h"
 
 #define MAX_HTTP_REQUESTS_SIZE 4096 // Tamanyo maximo de la peticion
 #define MAX_HTTP_NUM_HEADERS 100    // Numero maximo de cabeceras
 #define MAX_HTTP_DATE_LEN 128       // Maxima longitud de la fecha
-#define MAX_HTTP_HEADER 1024 // Tamanyo maximo de cabecera en la respuesta
-#define MAX_HTTP_ERRORS 4    // Numero de errores del servidor
-#define MAX_HTTP_PATH 100    // Tamanyo maximo del path
-#define MAX_HTTP_COMMAND 200 // Tamanyo maximo del comando CGI
-#define MAX_HTTP_CGI_RESPONSE 4096 // Tamanyo maximo de la respuesta del script
+#define MAX_HTTP_HEADER 1024   // Tamanyo maximo de cabecera en la respuesta
+#define MAX_HTTP_ERRORS 4      // Numero de errores del servidor
+#define MAX_HTTP_PATH 100      // Tamanyo maximo del path
+#define MAX_HTTP_COMMAND 200   // Tamanyo maximo del comando CGI
 
 #define READ 0
 #define WRITE 1
@@ -37,6 +37,7 @@ typedef enum error {
     NOT_FOUND,
     NOT_IMPLEMENTED,
     INTERNAL_SERVER_ERROR,
+    OK,
 } error_t;
 
 typedef struct request_header {
@@ -214,7 +215,7 @@ static int http_parse_request(int socket, request_t* request)
         sprintf(request->body, "%s", buf + pret_total);
     }
 
-    return 0;
+    return OK;
 }
 
 static void http_free_request(request_t* request)
@@ -248,17 +249,14 @@ static int http_get(request_t request,
                     char* server_root,
                     char* server_signature)
 {
-    int fd_file;
-    int response_len;
-    ssize_t offset = 0;
-    ssize_t bytes = 0;
+    int response_body_len;
     struct stat attr;
     char last_modified[MAX_HTTP_DATE_LEN];
     char date[MAX_HTTP_DATE_LEN];
     char response_header[MAX_HTTP_HEADER];
     char path[MAX_HTTP_PATH];
     char command[MAX_HTTP_COMMAND];
-    char cgi_response[MAX_HTTP_CGI_RESPONSE];
+    char* response_body;
     char* content_type = NULL;
     char* args = NULL;
     FILE* file = NULL;
@@ -287,18 +285,22 @@ static int http_get(request_t request,
         if (!file) {
             return NOT_FOUND;
         }
-        response_len = fread(cgi_response, 1, MAX_HTTP_CGI_RESPONSE, file);
     } else {
-        // Obtenemos el recurso
-        fd_file = open(path, O_RDONLY);
-        if (fd_file == -1) {
+        file = fopen(path, "rb");
+        if (!file) {
             return NOT_FOUND;
         }
-        fstat(fd_file, &attr);
-        response_len = attr.st_size;
     }
 
+    fseek(file, 0L, SEEK_END);
+    response_body_len = ftell(file);
+    fseek(file, 0L, SEEK_SET);
+
+    response_body = (char*)malloc((response_body_len + 1) * sizeof(char));
+    fread(response_body, 1, response_body_len, file);
+
     // Ultima vez modificado
+    stat(path, &attr);
     strftime(last_modified,
              MAX_HTTP_DATE_LEN,
              "%a, %d %b %Y %H:%M:%S %Z",
@@ -320,46 +322,21 @@ static int http_get(request_t request,
             date,
             server_signature,
             last_modified,
-            response_len,
+            response_body_len,
             content_type);
 
-    do {
-        // Enviamos la cabecera de la respuesta
-        bytes = send(socket,
-                     response_header + offset,
-                     strlen(response_header) - offset,
-                     0);
-        if (bytes == -1) {
-            return INTERNAL_SERVER_ERROR;
-        }
-        offset += bytes;
-    } while (offset < (ssize_t)strlen(response_header));
-    offset = 0;
-    if (args) {
-        do {
-            // Enviamos el cuerpo de la cabecera
-            bytes = send(socket, cgi_response, MAX_HTTP_CGI_RESPONSE, 0);
-            if (bytes == -1) {
-                // TODO: Revisar error ya que la cabecera ha sido enviada
-                return INTERNAL_SERVER_ERROR;
-            }
-            offset += bytes;
-        } while (offset < attr.st_size);
+    if (socket_send(
+          socket, response_header, response_body, response_body_len) == -1) {
+        return INTERNAL_SERVER_ERROR;
+    }
 
+    if (args) {
         pclose(file);
     } else {
-        do {
-            // Enviamos el cuerpo de la cabecera
-            bytes = sendfile(socket, fd_file, NULL, response_len);
-            if (bytes == -1) {
-                // TODO: Revisar error ya que la cabecera ha sido enviada
-                return INTERNAL_SERVER_ERROR;
-            }
-            offset += bytes;
-        } while (offset < attr.st_size);
-
-        close(fd_file);
+        fclose(file);
     }
+
+    free(response_body);
 
     return 0;
 }

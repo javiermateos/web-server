@@ -12,6 +12,7 @@
 
 int socket_init(char* port, int backlog);
 int socket_accept(int sock_fd);
+int socket_send(int sock_fd, char* response_header, char* response_body, int response_body_len);
 
 #endif /* __SOCKET_H__ */
 
