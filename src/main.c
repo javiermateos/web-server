@@ -5,9 +5,9 @@
  * FECHA CREACION: 4 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
  *****************************************************************************/
-#include <fcntl.h>   // open
-#include <signal.h>  // pthread_sigmask
-#include <stdbool.h> // bool
+#include <fcntl.h>        // open
+#include <signal.h>       // pthread_sigmask
+#include <stdbool.h>      // bool
 #include <sys/resource.h> // getrlimit
 #include <sys/socket.h>   // send
 #include <sys/stat.h>     // umask
@@ -20,9 +20,9 @@
 #include "socket.h"
 #include "tpool.h"
 
-#define TIME_OUT_SOCKET 15 // Tiempo de espera en un socket de un cliente
+#define TIME_OUT_SOCKET 15      // Tiempo de espera en un socket de un cliente
 #define MAX_SERVER_SIGNATURE 50 // Tamanyo maximo de nombre de servidor
-#define MAX_SERVER_ROOT 50 // Tamanyio maximo del directorio root http
+#define MAX_SERVER_ROOT 50      // Tamanyio maximo del directorio root http
 
 int sock_fd;
 tpool_t* tm;
