@@ -28,9 +28,7 @@
 #define MAX_HTTP_ERRORS 4      // Numero de errores del servidor
 #define MAX_HTTP_PATH 100      // Tamanyo maximo del path
 #define MAX_HTTP_COMMAND 200   // Tamanyo maximo del comando CGI
-
-#define READ 0
-#define WRITE 1
+#define MAX_HTTP_CGI_RESPONSE 3072 // Tamanyo maximo de la respuesta CGI
 
 typedef enum error {
     BAD_REQUEST,
@@ -56,6 +54,9 @@ typedef struct request {
 char* get_response =
   "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: "
   "%s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
+char* post_response =
+  "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: "
+  "%s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
 char* options_response =
   "HTTP/1.%d 200 OK\r\nDate: %s\r\nConnection: close\r\nServer: "
   "%s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
@@ -75,6 +76,10 @@ char* error_response[MAX_HTTP_ERRORS] = {
 static int http_parse_request(int socket, request_t* request);
 static void http_free_request(request_t* request);
 static int http_get(request_t request,
+                    int socket,
+                    char* server_root,
+                    char* server_signature);
+static int http_post(request_t request,
                     int socket,
                     char* server_root,
                     char* server_signature);
@@ -104,6 +109,18 @@ void http(int socket, char* server_root, char* server_signature)
 
         if (!strcmp("GET", request.header.method)) {
             status = http_get(request, socket, server_root, server_signature);
+            if (status == BAD_REQUEST) {
+                http_error(socket, server_signature, BAD_REQUEST);
+                break;
+            } else if (status == NOT_FOUND) {
+                http_error(socket, server_signature, NOT_FOUND);
+                break;
+            } else if (status == INTERNAL_SERVER_ERROR) {
+                http_error(socket, server_signature, INTERNAL_SERVER_ERROR);
+                break;
+            }
+        } else if (!strcmp("POST", request.header.method)) {
+            status = http_post(request, socket, server_root, server_signature);
             if (status == BAD_REQUEST) {
                 http_error(socket, server_signature, BAD_REQUEST);
                 break;
@@ -274,9 +291,9 @@ static int http_get(request_t request,
 
     if (args) {
         if (strstr(path, ".py")) {
-            sprintf(command, "python %s %s", path, args);
+            sprintf(command, "python %s %s 2>&1", path, args);
         } else if (strstr(path, ".php")) {
-            sprintf(command, "php %s %s", path, args);
+            sprintf(command, "php %s %s 2>&1", path, args);
         } else {
             return BAD_REQUEST;
         }
@@ -285,18 +302,23 @@ static int http_get(request_t request,
         if (!file) {
             return NOT_FOUND;
         }
+        // Nota: Puesto que este "file" no es un stream normal, no podemos
+        // determinar el tamanio que tendrá, ya que en realidad se trata de
+        // de un pipe.
+        response_body_len = MAX_HTTP_CGI_RESPONSE;
     } else {
         file = fopen(path, "rb");
         if (!file) {
             return NOT_FOUND;
         }
+        fseek(file, 0L, SEEK_END);
+        response_body_len = ftell(file);
+        fseek(file, 0L, SEEK_SET);
     }
 
-    fseek(file, 0L, SEEK_END);
-    response_body_len = ftell(file);
-    fseek(file, 0L, SEEK_SET);
 
     response_body = (char*)malloc((response_body_len + 1) * sizeof(char));
+    memset(response_body, 0, response_body_len);
     fread(response_body, 1, response_body_len, file);
 
     // Ultima vez modificado
@@ -366,6 +388,102 @@ static int http_options(request_t request, int socket, char* server_signature)
     } while (offset < (ssize_t)strlen(response_header));
 
     return 0;
+}
+
+static int http_post(request_t request, int socket, char* server_root, char* server_signature)
+{
+    int response_body_len;
+    struct stat attr;
+    char last_modified[MAX_HTTP_DATE_LEN];
+    char date[MAX_HTTP_DATE_LEN];
+    char response_header[MAX_HTTP_HEADER];
+    char path[MAX_HTTP_PATH];
+    char command[MAX_HTTP_COMMAND];
+    char* response_body;
+    char* content_type = NULL;
+    char* args = NULL;
+    FILE* file = NULL;
+
+    // Eliminamos los argumentos del path si existen
+    if (strstr(request.header.path, "?")) {
+        args = strrchr(request.header.path, '?');
+        *args = '\0';
+        args++;
+    }
+
+    // Obtenemos el path del recurso
+    strcpy(path, server_root);
+    strcat(path, request.header.path);
+
+    if (request.body) {
+        if (strstr(path, ".py")) {
+            sprintf(command, "python %s %s 2>&1", path, request.body);
+        } else if (strstr(path, ".php")) {
+            sprintf(command, "php %s %s 2>&1", path, request.body);
+        } else {
+            return BAD_REQUEST;
+        }
+    } else {
+        if (strstr(path, ".py")) {
+            sprintf(command, "python %s 2>&1", path);
+        } else if (strstr(path, ".php")) {
+            sprintf(command, "php %s 2>&1", path);
+        } else {
+            return BAD_REQUEST;
+        }
+    }
+
+    file = popen(command, "r");
+    if (!file) {
+        return NOT_FOUND;
+    }
+
+    response_body_len = MAX_HTTP_CGI_RESPONSE;
+    response_body = (char*)malloc((response_body_len + 1) * sizeof(char));
+    memset(response_body, 0, response_body_len);
+    fread(response_body, 1, response_body_len, file);
+
+    // Ultima vez modificado
+    stat(path, &attr);
+    strftime(last_modified,
+             MAX_HTTP_DATE_LEN,
+             "%a, %d %b %Y %H:%M:%S %Z",
+             gmtime(&attr.st_mtime));
+
+    // Tipo de fichero
+    content_type = http_get_content_type(path);
+    if (!content_type) {
+        return INTERNAL_SERVER_ERROR;
+    }
+
+    // Obtengo la fecha para la cabecera date
+    http_get_date(date);
+
+    memset(response_header, 0, MAX_HTTP_HEADER);
+    sprintf(response_header,
+            get_response,
+            request.header.version,
+            date,
+            server_signature,
+            last_modified,
+            response_body_len,
+            content_type);
+
+    if (socket_send(
+          socket, response_header, response_body, response_body_len) == -1) {
+        return INTERNAL_SERVER_ERROR;
+    }
+
+    if (args) {
+        pclose(file);
+    } else {
+        fclose(file);
+    }
+
+    free(response_body);
+
+    return 0;
+
 }
 
 static char* http_get_content_type(const char* path)

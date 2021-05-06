@@ -112,7 +112,7 @@ int socket_send(int sock_fd,
             return -1;
         }
         offset += bytes;
-    } while (offset < (ssize_t)strlen(response_body));
+    } while (offset < response_body_len);
 
     return 0;
 }
