@@ -25,7 +25,7 @@
 #define MAX_HTTP_NUM_HEADERS 100    // Numero maximo de cabeceras
 #define MAX_HTTP_DATE_LEN 128       // Maxima longitud de la fecha
 #define MAX_HTTP_HEADER 1024   // Tamanyo maximo de cabecera en la respuesta
-#define MAX_HTTP_ERRORS 4      // Numero de errores del servidor
+#define MAX_HTTP_ERRORS 5      // Numero de errores del servidor
 #define MAX_HTTP_PATH 100      // Tamanyo maximo del path
 #define MAX_HTTP_COMMAND 200   // Tamanyo maximo del comando CGI
 #define MAX_HTTP_CGI_RESPONSE 3072 // Tamanyo maximo de la respuesta CGI
@@ -34,6 +34,7 @@ typedef enum error {
     BAD_REQUEST,
     NOT_FOUND,
     NOT_IMPLEMENTED,
+    UNSUPPORTED_MEDIA_TYPE,
     INTERNAL_SERVER_ERROR,
     OK,
 } error_t;
@@ -67,6 +68,8 @@ char* error_response[MAX_HTTP_ERRORS] = {
     "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
     "HTTP/1.1 501 Not Implemented\r\nDate: %s\r\nConnection: close\r\nServer: "
     "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
+    "HTTP/1.1 415 Unsupported Media Type\r\nDate: %s\r\nConnection: close\r\nServer: "
+    "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
     "HTTP/1.1 500 Internal Server Error\r\nDate: %s\r\nConnection: "
     "close\r\nServer: %s\r\nContent-Length: "
     "0\r\nContent-Type:text/html\r\n\r\n",
@@ -90,7 +93,7 @@ static char* http_get_content_type(const char* file_extension);
 static void http_get_date(char* date);
 static void print_request(request_t request);
 
-void http(int socket, char* server_root, char* server_signature)
+int http(int socket, char* server_root, char* server_signature)
 {
     int status;
     request_t request;
@@ -130,6 +133,9 @@ void http(int socket, char* server_root, char* server_signature)
             } else if (status == INTERNAL_SERVER_ERROR) {
                 http_error(socket, server_signature, INTERNAL_SERVER_ERROR);
                 break;
+            } else if (status == UNSUPPORTED_MEDIA_TYPE) {
+                http_error(socket, server_signature, UNSUPPORTED_MEDIA_TYPE);
+                break;
             }
         } else if (!strcmp("OPTIONS", request.header.method)) {
             status = http_options(request, socket, server_signature);
@@ -142,10 +148,16 @@ void http(int socket, char* server_root, char* server_signature)
             break;
         }
 
+        if (status == INTERNAL_SERVER_ERROR) {
+            return -1;
+        }
+
         http_free_request(&request);
     }
 
     http_free_request(&request);
+
+    return 0;
 }
 
 static int http_parse_request(int socket, request_t* request)
@@ -331,7 +343,7 @@ static int http_get(request_t request,
     // Tipo de fichero
     content_type = http_get_content_type(path);
     if (!content_type) {
-        return INTERNAL_SERVER_ERROR;
+        return UNSUPPORTED_MEDIA_TYPE;
     }
 
     // Obtengo la fecha para la cabecera date
@@ -453,7 +465,7 @@ static int http_post(request_t request, int socket, char* server_root, char* ser
     // Tipo de fichero
     content_type = http_get_content_type(path);
     if (!content_type) {
-        return INTERNAL_SERVER_ERROR;
+        return UNSUPPORTED_MEDIA_TYPE;
     }
 
     // Obtengo la fecha para la cabecera date

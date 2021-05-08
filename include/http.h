@@ -10,6 +10,6 @@
 
 #include <stdio.h>
 
-void http(int socket, char* server_root, char* server_signature);
+int http(int socket, char* server_root, char* server_signature);
 
 #endif /* __HTTP_H__ */

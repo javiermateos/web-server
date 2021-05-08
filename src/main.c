@@ -153,13 +153,17 @@ static void signal_handler()
 
 static void thread_routine(void* args)
 {
+    int status;
     struct thread_arg arg = *((struct thread_arg*)args);
 
     free(args);
 
     logger(LOG_INFO, "Conexion entrante recibida...\n");
 
-    http(arg.new_fd, arg.server_root, arg.server_signature);
+    status = http(arg.new_fd, arg.server_root, arg.server_signature);
+    if (status == -1) {
+        logger(LOG_ERR, "Error interno del servidor enviando los datos a través del socket...\n");
+    }
     close(arg.new_fd);
 
     logger(LOG_INFO, "Conexion cerrada...\n");
