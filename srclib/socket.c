@@ -6,7 +6,6 @@
  * FECHA CREACION: 25 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
  *****************************************************************************/
-
 #include <arpa/inet.h>  // inet_ntop
 #include <netdb.h>      // addrinfo, getaddrinfo
 #include <string.h>     // memset

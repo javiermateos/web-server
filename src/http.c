@@ -30,6 +30,7 @@
 #define MAX_HTTP_COMMAND 200   // Tamanyo maximo del comando CGI
 #define MAX_HTTP_CGI_RESPONSE 3072 // Tamanyo maximo de la respuesta CGI
 
+// Tipos de errores que devuelve el protocolo http
 typedef enum error {
     BAD_REQUEST,
     NOT_FOUND,
@@ -39,6 +40,7 @@ typedef enum error {
     OK,
 } error_t;
 
+// Header de una request
 typedef struct request_header {
     char* method;
     char* path;
@@ -47,11 +49,13 @@ typedef struct request_header {
     struct phr_header* headers;
 } request_header_t;
 
+// Estructura que define una request
 typedef struct request {
     request_header_t header;
     char* body;
 } request_t;
 
+// Templates para las respuestas de los errores
 char* get_response =
   "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: "
   "%s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
@@ -75,7 +79,6 @@ char* error_response[MAX_HTTP_ERRORS] = {
     "0\r\nContent-Type:text/html\r\n\r\n",
 };
 
-// Funciones privadas
 static int http_parse_request(int socket, request_t* request);
 static void http_free_request(request_t* request);
 static int http_get(request_t request,
@@ -88,10 +91,8 @@ static int http_post(request_t request,
                     char* server_signature);
 static int http_options(request_t request, int socket, char* server_signature);
 static void http_error(int socket, char* server_signature, error_t error);
-// Funciones Auxiliares
 static char* http_get_content_type(const char* file_extension);
 static void http_get_date(char* date);
-static void print_request(request_t request);
 
 int http(int socket, char* server_root, char* server_signature)
 {
@@ -542,21 +543,4 @@ static void http_error(int socket, char* server_signature, error_t error)
     http_get_date(date);
     sprintf(response_header, error_response[error], date, server_signature);
     send(socket, response_header, strlen(response_header), 0);
-}
-
-static void print_request(request_t request)
-{
-    size_t i;
-
-    printf("****************************************************\n");
-    printf("Method is: %s\n", request.header.method);
-    printf("Path is: %s\n", request.header.path);
-    printf("Version is: 1.%d\n", request.header.version);
-    for (i = 0; i < request.header.num_headers; i++) {
-        printf("%s : %s\n",
-               request.header.headers[i].name,
-               request.header.headers[i].value);
-    }
-    printf("Body is:\n %s\n", request.body);
-    printf("****************************************************\n");
 }

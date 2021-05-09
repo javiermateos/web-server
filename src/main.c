@@ -24,25 +24,61 @@
 #define MAX_SERVER_SIGNATURE 50 // Tamanyo maximo de nombre de servidor
 #define MAX_SERVER_ROOT 50      // Tamanyio maximo del directorio root http
 
-int sock_fd;
-tpool_t* tm;
-bool daemon_proc;
-bool debug;
+int sock_fd;      // Socket en el que recibe las peticiones
+tpool_t* tm;      // Pool de hilos
+bool daemon_proc; // Indica si debe ser un proceso daemon
+bool debug;       // Indica que el servidor esta en modo debug
 struct config_s {
     struct read_ini* ri;
     struct ini* conf;
 } config;
 
+// Argumentos que se pasa a los hilos
 struct thread_arg {
-    int new_fd;
-    char server_signature[MAX_SERVER_SIGNATURE];
-    char server_root[MAX_SERVER_ROOT];
+    int new_fd; // Socket en el que se comunica con el cliente
+    char server_signature[MAX_SERVER_SIGNATURE]; // Nombre del servidor
+    char server_root[MAX_SERVER_ROOT]; // Carpeta raiz en la que se encuentran
+                                       // los ficheros del servidor http
 };
 
+/*******************************************************************************
+ * FUNCION: static void signal_handler()
+ * DESCRIPCION: Rutina de servicio cuando se recibe la señal SIGINT o SIGTERM.
+ ******************************************************************************/
 static void signal_handler();
+/*******************************************************************************
+ * FUNCION: static void thread_routine(void* args)
+ * ARGS_IN: void* args - Argumento de la funcion ejecutada por el hilo.
+ * DESCRIPCION: Rutina de servicio que ejecuta un hilo.
+ ******************************************************************************/
 static void thread_routine(void* args);
+/*******************************************************************************
+ * FUNCION: static void daemon_process()
+ * DESCRIPCION: Convierte el proceso en un proceso demonio.
+ ******************************************************************************/
 static void daemon_process();
+/*******************************************************************************
+ * FUNCION: static void logger(int priority, char* message)
+ * ARGS_IN: int priority - Prioridad del mensaje que se loggea.
+ *          char* message - Mensaje que se loggea.
+ * DESCRIPCION: Logea el mensaje el logger del sistema en caso de que se trate
+ * de un proceso demonio o imprime por stdout en caso contrario.
+ *
+ * Los posibles valores de priority son: LOG_INFO, LOG_DEBUG, LOG_ERROR.
+ ******************************************************************************/
 static void logger(int priority, char* message);
+/*******************************************************************************
+ * FUNCION: static struct thread_arg* create_thread_args(int new_fd,
+                                             char* server_root,
+                                             char* server_signature);
+ * ARGS_IN: int new_fd - Descriptor de fichero de la conexion.
+ *          char* server_root - Directorio raiz del servidor web.
+ *          char* server_signature - Nombre del servidor.
+ * DESCRIPCION: Crea e inicializa el argumento para la función de trabajo del
+ * hilo.
+ * ARGS_OUT: thread_arg* - Argumento creado e inicializado para la funcion de
+ * trabajo.
+ ******************************************************************************/
 static struct thread_arg* create_thread_args(int new_fd,
                                              char* server_root,
                                              char* server_signature);
@@ -64,6 +100,7 @@ int main(void)
         exit(EXIT_FAILURE);
     }
 
+    // Obtenmos lo parametros de configuracion e inicializacion del servidor
     backlog = atoi(ini_get_value(config.conf, "inicializacion", "max_clients"));
     port = ini_get_value(config.conf, "inicializacion", "listen_port");
     num_threads =
@@ -75,6 +112,7 @@ int main(void)
       ini_get_value(config.conf, "configuracion", "server_signature");
 
     if (daemon_proc) {
+        // Convertimos el proceso en demonio
         fprintf(stdout, "Ejecutando servidor como proceso daemon...\n");
         daemon_process();
         // Inicializamos el fichero de logs
@@ -162,7 +200,9 @@ static void thread_routine(void* args)
 
     status = http(arg.new_fd, arg.server_root, arg.server_signature);
     if (status == -1) {
-        logger(LOG_ERR, "Error interno del servidor enviando los datos a través del socket...\n");
+        logger(LOG_ERR,
+               "Error interno del servidor enviando los datos a través del "
+               "socket...\n");
     }
     close(arg.new_fd);
 

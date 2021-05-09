@@ -11,9 +11,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-typedef struct tpool tpool_t;
+typedef struct tpool tpool_t; // Pool de hilos
 
-typedef void (*thread_func_t)(void* arg);
+typedef void (*thread_func_t)(void* arg); // Funcion tipo que ejecutan los hilos
 
 /*******************************************************************************
  * FUNCION: tpool_t* tpool_create(int num)

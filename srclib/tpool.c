@@ -17,11 +17,9 @@
  * FECHA CREACION: 4 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
  *****************************************************************************/
-
 #include <pthread.h>
 #include <signal.h> // sigaddset, sigemptyset
-#include <stdlib.h>
-#include <unistd.h>
+#include <stdlib.h> // malloc
 
 #include "tpool.h"
 
