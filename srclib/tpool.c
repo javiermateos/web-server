@@ -45,8 +45,9 @@ struct tpool {
 };
 
 /*******************************************************************************
- * FUNCION: static tpool_work_t* tpool_work_create(thread_func_t func, void*
- *arg); ARGS_IN: thread_func_t func - funcion de trabajo que ejecutara el hilo.
+ * FUNCION: static tpool_work_t* tpool_work_create(thread_func_t func,
+ *                                                void* arg)
+ * ARGS_IN: thread_func_t func - funcion de trabajo que ejecutara el hilo.
  *          void* arg - argumento de la funcion de trabajo.
  * DESCRIPCION: Crea e inicializa un trabajo.
  * ARGS_OUT: tpool_work_t* - trabajo inicializado.
@@ -72,8 +73,8 @@ static tpool_work_t* tpool_get_work(tpool_t* tm);
  * FUNCION: static void* tpool_worker(void* arg);
  * ARGS_IN: void* arg - contiene los argumentos de la funcion
  * DESCRIPCION: Funcion que es ejecutada por todos los hilos y donde el trabajo
- * es realizado por los mismos. Esta funcion espera hasta que haya trabajo que
- * procesar y lo procesa.
+ *              es realizado por los mismos. Esta funcion espera hasta que haya 
+ *              trabajo que procesar y lo procesa.
  * ARGS_OUT: void* - NULL si todo ha ido correctamente.
  ******************************************************************************/
 static void* tpool_worker(void* arg);

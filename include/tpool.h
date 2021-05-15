@@ -27,7 +27,7 @@ tpool_t* tpool_create(int num);
  * FUNCION: void tpool_destroy(tpool_t* tm)
  * ARGS_IN: int num - pool de hilos que se destruye.
  * DESCRIPCION: Destruye y libera el pool de hilos esperando a que todos los
- * hilos del pool finalicen.
+ *              hilos del pool finalicen.
  ******************************************************************************/
 void tpool_destroy(tpool_t* tm);
 
@@ -36,9 +36,9 @@ void tpool_destroy(tpool_t* tm);
  * ARGS_IN: tpool_t* tm - pool de hilos al que se aniade el trabajo.
  *          thread_funct_t func - funcion de trabajo que ejecuta el hilo.
  *          void* arg - argumentos de la funcion de trabajo. 
- * DESCRIPCION: Aniade un trabajo a la cola de trabajos del pool de hilos. Si
- * no hay mas espacio en la cola de trabajo del pool la funcion bloquea al hilo
- * que la ha llamado hasta que haya espacio.
+ * DESCRIPCION: Aniade un trabajo a la cola de trabajos del pool de hilos. Si 
+ *              no hay mas espacio en la cola de trabajo del pool la funcion 
+ *              bloquea al hilo que la ha llamado hasta que haya espacio.
  * ARGS_OUT: bool - true si se aniade o false en caso contrario.
  ******************************************************************************/
 bool tpool_add_work(tpool_t* tm, thread_func_t func, void* arg);

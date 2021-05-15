@@ -18,14 +18,16 @@
  * ARGS_OUT: int - Descriptor de fichero del socket.
  ******************************************************************************/
 int socket_init(char* port, int backlog);
+
 /*******************************************************************************
  * FUNCION: int socket_accept(int sock_fd)
  * ARGS_IN: int sock_fd - Descriptor de fichero del socket en el que escucha el
- * servidor.
+ *                        servidor.
  * DESCRIPCION: Acepta conexiones entrantes al servidor.
  * ARGS_OUT: int - Descriptor de fichero del socket para la conexion recibida.
  ******************************************************************************/
 int socket_accept(int sock_fd);
+
 /*******************************************************************************
  * FUNCION: int socket_send(int sock_fd, char* response_header, char*
  *                          response_body, int response_body_len)
@@ -36,7 +38,7 @@ int socket_accept(int sock_fd);
  *          int response_body_len - Longitud del cuerpo del mensaje.
  * DESCRIPCION: Acepta conexiones entrantes al servidor.
  * ARGS_OUT: int - 0 si se ha enviado todo correctamente o -1 si se produce
- * algun error.
+ *                 algun error.
  ******************************************************************************/
 int socket_send(int sock_fd,
                 char* response_header,

@@ -1,11 +1,11 @@
-/*****************************************************************************
+/******************************************************************************
  * ARCHIVO: http.c
  * DESCRIPCION: Implementacion de la interfaz de programacion para el
  * protocolo HTTP/1.1
  *
  * FECHA CREACION: 4 Marzo de 2021
  * AUTORES: Javier Mateos Najari, Adrian Sebastian Gil
- *****************************************************************************/
+ ******************************************************************************/
 #include <fcntl.h>        // open
 #include <stdlib.h>       // NULL
 #include <string.h>       // strcmp
@@ -15,7 +15,6 @@
 #include <sys/stat.h>     // open
 #include <sys/wait.h>     // wait
 #include <time.h>         // strftime
-#include <unistd.h>       // chdir
 
 #include "http.h"
 #include "picohttpparser.h"
@@ -24,47 +23,53 @@
 #define MAX_HTTP_REQUESTS_SIZE 4096 // Tamanyo maximo de la peticion
 #define MAX_HTTP_NUM_HEADERS 100    // Numero maximo de cabeceras
 #define MAX_HTTP_DATE_LEN 128       // Maxima longitud de la fecha
-#define MAX_HTTP_HEADER 1024   // Tamanyo maximo de cabecera en la respuesta
-#define MAX_HTTP_ERRORS 5      // Numero de errores del servidor
-#define MAX_HTTP_PATH 100      // Tamanyo maximo del path
-#define MAX_HTTP_COMMAND 200   // Tamanyo maximo del comando CGI
+#define MAX_HTTP_HEADER 1024       // Tamanyo maximo de cabecera en la respuesta
+#define MAX_HTTP_ERRORS 5          // Numero de errores del servidor
+#define MAX_HTTP_PATH 100          // Tamanyo maximo del path
+#define MAX_HTTP_COMMAND 200       // Tamanyo maximo del comando CGI
 #define MAX_HTTP_CGI_RESPONSE 3072 // Tamanyo maximo de la respuesta CGI
 
-// Tipos de errores que devuelve el protocolo http
+// Definicion de los errores del protocolo http
 typedef enum error {
-    BAD_REQUEST,
-    NOT_FOUND,
-    NOT_IMPLEMENTED,
-    UNSUPPORTED_MEDIA_TYPE,
-    INTERNAL_SERVER_ERROR,
-    OK,
+    BAD_REQUEST,            // BAD_REQUEST
+    NOT_FOUND,              // NOT_FOUND
+    NOT_IMPLEMENTED,        // NOT_IMPLEMENTED
+    UNSUPPORTED_MEDIA_TYPE, // UNSUPPORTED_MEDIA_TYPE
+    INTERNAL_SERVER_ERROR,  // INTERNAL_SERVER_ERROR
+    OK,                     // OK
 } error_t;
 
-// Header de una request
+// Definicion de la cabecera del protocolo http
 typedef struct request_header {
-    char* method;
-    char* path;
-    int version;
-    size_t num_headers;
-    struct phr_header* headers;
+    char* method;               // Metodo del protocolo
+    char* path;                 // Path del recurso
+    int version;                // Version del protocolo http
+    size_t num_headers;         // Numero de cabeceras de la peticion
+    struct phr_header* headers; // Estructura con las cabeceras de la peticion
 } request_header_t;
 
-// Estructura que define una request
+// Request http
 typedef struct request {
-    request_header_t header;
-    char* body;
+    request_header_t header; // Cabecera de la request
+    char* body;              // Cuerpo de la request
 } request_t;
 
-// Templates para las respuestas de los errores
+// Cadena con la respuesta a una peticion GET
 char* get_response =
   "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: "
   "%s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
+
+// Cadena con la respuesta a una peticion POST
 char* post_response =
   "HTTP/1.%d 200 OK\r\nDate: %s\r\nServer: %s\r\nLast-Modified: "
   "%s\r\nContent-Length: %d\r\nContent-Type: %s\r\n\r\n";
+
+// Cadena con la respuesta a una peticion OPTIONS
 char* options_response =
   "HTTP/1.%d 200 OK\r\nDate: %s\r\nConnection: close\r\nServer: "
   "%s\r\nContent-Length: 0\r\nAllow: GET, POST, OPTIONS\r\n\r\n";
+
+// Cadenas generadas para enviar la respuesta si se produce un error
 char* error_response[MAX_HTTP_ERRORS] = {
     "HTTP/1.1 400 Bad Request\r\nDate: %s\r\nConnection: close\r\nServer: "
     "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
@@ -72,27 +77,118 @@ char* error_response[MAX_HTTP_ERRORS] = {
     "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
     "HTTP/1.1 501 Not Implemented\r\nDate: %s\r\nConnection: close\r\nServer: "
     "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
-    "HTTP/1.1 415 Unsupported Media Type\r\nDate: %s\r\nConnection: close\r\nServer: "
+    "HTTP/1.1 415 Unsupported Media Type\r\nDate: %s\r\nConnection: "
+    "close\r\nServer: "
     "%s\r\nContent-Length: 0\r\nContent-Type:text/html\r\n\r\n",
     "HTTP/1.1 500 Internal Server Error\r\nDate: %s\r\nConnection: "
     "close\r\nServer: %s\r\nContent-Length: "
     "0\r\nContent-Type:text/html\r\n\r\n",
 };
 
+// Funciones privadas
+
+/******************************************************************************
+ * FUNCION: static int http_parse_request(int socket, request_t* request)
+ * ARGS_IN: int socket - socket donde se van a recibir las peticiones.
+ *          request_t* request - estructura donde se va a almacenar la request
+ *                               recibida.
+ * DESCRIPCION: almacena lapeticion leida en la estructura recibida como
+ *              argumento.
+ * ARGS_OUT: int - codigo de la estructura error.
+ *****************************************************************************/
 static int http_parse_request(int socket, request_t* request);
+
+/*****************************************************************************
+ * FUNCION: static void http_free_request(request_t* request)
+ * ARGS_IN: request_t* request - peticion a liberar.
+ * DESCRIPCION: libera la memoria de una peticion.
+ *****************************************************************************/
 static void http_free_request(request_t* request);
+
+/******************************************************************************
+ * FUNCION: http_get(request_t request,
+ *                  int socket,
+ *                  char* server_root,
+ *                  char* server_signature)
+ * ARGS_IN: request_t request - peticion a procesar.
+ *          int socket - socket donde esta establecida la conexion.
+ *          char* server_root - ruta donde estan los recursos del servidor.
+ *          char* server_signature - nombre del servidor.
+ * DESCRIPCION: procesa y genera la respuesta a las peticiones de metodo GET
+ *              recibidas por el servidor.
+ * ARGS_OUT: int - codigo de la estuctura error.
+ *****************************************************************************/
 static int http_get(request_t request,
                     int socket,
                     char* server_root,
                     char* server_signature);
+
+/******************************************************************************
+ * FUNCION: http_post(request_t request,
+ *                   int socket,
+ *                   char* server_root,
+ *                   char* server_signature)
+ * ARGS_IN: request_t request - peticion a procesar.
+ *          int socket - socket donde esta establecida la conexion.
+ *          char* server_root - ruta donde estan los recursos del servidor.
+ *          char* server_signature - nombre del servidor.
+ * DESCRIPCION: procesa y genera la respuesta a las peticiones de metodo POST
+ *              recibidas por el servidor.
+ * ARGS_OUT: int - codigo de la estuctura error.
+ *****************************************************************************/
 static int http_post(request_t request,
-                    int socket,
-                    char* server_root,
-                    char* server_signature);
+                     int socket,
+                     char* server_root,
+                     char* server_signature);
+
+/******************************************************************************
+ * FUNCION: static int http_options(request_t request,
+ *                                 int socket,
+ *                                 char* server_signature)
+ * ARGS_IN: request_t request - peticion a procesar.
+ *          int socket - socket donde esta establecida la conexion.
+ *          char* server_signature - nombre del servidor.
+ * DESCRIPCION: procesa y genera la respuesta a las peticiones de metodo
+ *              OPTIONS recibidas por el servidor.
+ * ARGS_OUT: int - codigo de la estuctura error.
+ *****************************************************************************/
 static int http_options(request_t request, int socket, char* server_signature);
+
+/******************************************************************************
+ * FUNCION: static void http_error(int socket,
+ *                                char* server_signature,
+ *                                error_t error)
+ * ARGS_IN: int socket - socket donde esta establecida la conexion.
+ *          char* server_signature - nombre del servidor.
+ *          error_t error - tipo de error obtenido.
+ * DESCRIPCION: envia el error obtenido como respuesta a la peticion recibida.
+ *****************************************************************************/
 static void http_error(int socket, char* server_signature, error_t error);
+
+// Funciones Auxiliares
+
+/******************************************************************************
+ * FUNCION: static char* http_get_content_type(const char* file_extension)
+ * ARGS_IN: const char* file_extension - ruta al fichero.
+ * DESCRIPCION: obtiene la extension del fichero que se va a procesar.
+ * ARGS_OUT: char* - extension del fichero.
+ *****************************************************************************/
 static char* http_get_content_type(const char* file_extension);
+
+/******************************************************************************
+ * FUNCION: static void http_get_date(char* date)
+ * ARGS_IN: char* date - cadena donde se guarda la fecha con el formato GMT.
+ * DESCRIPCION: obtiene la hora en formato GMT en la cadena recibida como
+ *              argumento.
+ *****************************************************************************/
 static void http_get_date(char* date);
+
+/******************************************************************************
+ * FUNCION: static void print_request(request_t request)
+ * ARGS_IN: request_t request - request a imprimir.
+ * DESCRIPCION: imprime la request recibida como argumento.
+ *****************************************************************************/
+static void print_request(request_t request);
 
 int http(int socket, char* server_root, char* server_signature)
 {
@@ -304,7 +400,7 @@ static int http_get(request_t request,
 
     if (args) {
         if (strstr(path, ".py")) {
-            sprintf(command, "python %s %s 2>&1", path, args);
+            sprintf(command, "python3 %s %s 2>&1", path, args);
         } else if (strstr(path, ".php")) {
             sprintf(command, "php %s %s 2>&1", path, args);
         } else {
@@ -328,7 +424,6 @@ static int http_get(request_t request,
         response_body_len = ftell(file);
         fseek(file, 0L, SEEK_SET);
     }
-
 
     response_body = (char*)malloc((response_body_len + 1) * sizeof(char));
     memset(response_body, 0, response_body_len);
@@ -403,7 +498,10 @@ static int http_options(request_t request, int socket, char* server_signature)
     return 0;
 }
 
-static int http_post(request_t request, int socket, char* server_root, char* server_signature)
+static int http_post(request_t request,
+                     int socket,
+                     char* server_root,
+                     char* server_signature)
 {
     int response_body_len;
     struct stat attr;
@@ -430,7 +528,7 @@ static int http_post(request_t request, int socket, char* server_root, char* ser
 
     if (request.body) {
         if (strstr(path, ".py")) {
-            sprintf(command, "python %s %s 2>&1", path, request.body);
+            sprintf(command, "python3 %s %s 2>&1", path, request.body);
         } else if (strstr(path, ".php")) {
             sprintf(command, "php %s %s 2>&1", path, request.body);
         } else {
@@ -438,7 +536,7 @@ static int http_post(request_t request, int socket, char* server_root, char* ser
         }
     } else {
         if (strstr(path, ".py")) {
-            sprintf(command, "python %s 2>&1", path);
+            sprintf(command, "python3 %s 2>&1", path);
         } else if (strstr(path, ".php")) {
             sprintf(command, "php %s 2>&1", path);
         } else {
@@ -496,7 +594,6 @@ static int http_post(request_t request, int socket, char* server_root, char* ser
     free(response_body);
 
     return 0;
-
 }
 
 static char* http_get_content_type(const char* path)
@@ -544,3 +641,21 @@ static void http_error(int socket, char* server_signature, error_t error)
     sprintf(response_header, error_response[error], date, server_signature);
     send(socket, response_header, strlen(response_header), 0);
 }
+
+static void print_request(request_t request)
+{
+    size_t i;
+
+    printf("****************************************************\n");
+    printf("Method is: %s\n", request.header.method);
+    printf("Path is: %s\n", request.header.path);
+    printf("Version is: 1.%d\n", request.header.version);
+    for (i = 0; i < request.header.num_headers; i++) {
+        printf("%s : %s\n",
+               request.header.headers[i].name,
+               request.header.headers[i].value);
+    }
+    printf("Body is:\n %s\n", request.body);
+    printf("****************************************************\n");
+}
+ 

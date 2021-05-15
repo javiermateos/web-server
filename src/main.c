@@ -62,7 +62,7 @@ static void daemon_process();
  * ARGS_IN: int priority - Prioridad del mensaje que se loggea.
  *          char* message - Mensaje que se loggea.
  * DESCRIPCION: Logea el mensaje el logger del sistema en caso de que se trate
- * de un proceso demonio o imprime por stdout en caso contrario.
+ *              de un proceso demonio o imprime por stdout en caso contrario.
  *
  * Los posibles valores de priority son: LOG_INFO, LOG_DEBUG, LOG_ERROR.
  ******************************************************************************/
@@ -75,9 +75,9 @@ static void logger(int priority, char* message);
  *          char* server_root - Directorio raiz del servidor web.
  *          char* server_signature - Nombre del servidor.
  * DESCRIPCION: Crea e inicializa el argumento para la función de trabajo del
- * hilo.
+ *              hilo.
  * ARGS_OUT: thread_arg* - Argumento creado e inicializado para la funcion de
- * trabajo.
+ *                         trabajo.
  ******************************************************************************/
 static struct thread_arg* create_thread_args(int new_fd,
                                              char* server_root,
