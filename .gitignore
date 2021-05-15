@@ -8,3 +8,4 @@ lib/*
 server
 .vscode/settings.json
 www/*
+wiki.md
