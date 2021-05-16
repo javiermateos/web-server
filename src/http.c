@@ -183,13 +183,6 @@ static char* http_get_content_type(const char* file_extension);
  *****************************************************************************/
 static void http_get_date(char* date);
 
-/******************************************************************************
- * FUNCION: static void print_request(request_t request)
- * ARGS_IN: request_t request - request a imprimir.
- * DESCRIPCION: imprime la request recibida como argumento.
- *****************************************************************************/
-static void print_request(request_t request);
-
 int http(int socket, char* server_root, char* server_signature)
 {
     int status;
@@ -641,21 +634,3 @@ static void http_error(int socket, char* server_signature, error_t error)
     sprintf(response_header, error_response[error], date, server_signature);
     send(socket, response_header, strlen(response_header), 0);
 }
-
-static void print_request(request_t request)
-{
-    size_t i;
-
-    printf("****************************************************\n");
-    printf("Method is: %s\n", request.header.method);
-    printf("Path is: %s\n", request.header.path);
-    printf("Version is: 1.%d\n", request.header.version);
-    for (i = 0; i < request.header.num_headers; i++) {
-        printf("%s : %s\n",
-               request.header.headers[i].name,
-               request.header.headers[i].value);
-    }
-    printf("Body is:\n %s\n", request.body);
-    printf("****************************************************\n");
-}
- 

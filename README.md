@@ -15,7 +15,6 @@ cat server.ini # Muestra la configuración del servidor
 make
 make run
 ```
-
 Una vez ejecutado el servidor se puede acceder a una pagina de prueba
 accediendo a la siguiente URL:
 
@@ -24,6 +23,11 @@ accediendo a la siguiente URL:
 **Nota**: Si se modifica el puerto en el que se ejecuta el servidor en el
 archivo de configuración el enlace no funcionará.
 
+**Nota**: Si se ejecuta el servidor en modo daemon el comando necesario para
+mirar los logs es:
+```sh
+sudo tail -f /var/log/syslog
+```
 ## Notas
 
 La pagina web de ejemplo contiene un enlace a un video que debería estar

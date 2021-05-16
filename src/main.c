@@ -185,6 +185,8 @@ static void signal_handler()
     tpool_destroy(tm);
     destroy_ini(config.conf);
     cleanup_readini(config.ri);
+    logger(LOG_INFO,
+           "Hilos del servidor finalizados, cerrando servidor...\n");
 
     exit(EXIT_SUCCESS);
 }
