@@ -1,6 +1,22 @@
 # Servidor web
 
-Repositorio para realizar la practica I de redes II.
+Repositorio para realizar la practica I de redes II de la [Escuela Politécnica Superior](https://www.uam.es/ss/Satellite/EscuelaPolitecnica/es/home.html) de la [UAM](https://www.uam.es/UAM/Home.htm?language=es).
+
+## Autores
+
+- Javier Mateos Najari
+- Adrian Sebastian Gil
+
+## Descripcion
+
+Este proyecto consiste en desarrollar un servidor web en el lenguaje de
+programación C. El servidor web que se ha implementado cumple con los
+siguientes requisitos funcionales:
+
+- Servidor concurrente mediante un pool de conexiones.
+- Soporte para el protocolo HTTP/1.1.
+    - Metodos: GET, POST, HEAD.
+- Soporte para ejecucion de scripts mediante WGI.
 
 ## Requisitos
 
@@ -30,8 +46,23 @@ sudo tail -f /var/log/syslog
 ```
 ## Notas
 
-La pagina web de ejemplo contiene un enlace a un video que debería estar
-en la ruta [./www/media](./www/media) pero que no se encontraba en los archivos
-suministrados por los profesores de la asignatura. No obstante, para probar
-dicha funcionalidad seria suficiente con colocar cualquier video en la ruta
-especificada anteriormente con el nombre *video.mpg*.
+La pagina web de ejemplo no contiene los archivos en la carpeta [www](./www/)
+correspondiente a los archivos media. Para probar la funcionalidad del servidor
+seria suficiente con introducir en dicha carpeta los archivos necesarios
+que aparecen en las rutas html.
+
+## Referencias
+
+[1]. [RFC 7231 - Hypertext Transfer Protocol (HTTP/1.1): Semantics and Content](https://datatracker.ietf.org/doc/html/rfc7231)
+
+[2]. [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/html/index-wide.html)
+
+[3]. [Iniparser lib](https://github.com/nowl/iniparser)
+
+[4]. [Concurrent Servers](https://eli.thegreenplace.net/2017/concurrent-servers-part-1-introduction/)
+
+[5]. [Thread Pool](https://nachtimwald.com/2019/04/12/thread-pool-in-c/)
+
+[6]. [POSIX thread (pthread) libraries](https://www.cs.cmu.edu/afs/cs/academic/class/15492-f07/www/pthreads.html)
+
+[7]. [HTTP Made Really Easy](https://www.jmarshall.com/easy/http/)
